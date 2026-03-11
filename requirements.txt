@@ -1,0 +1,14 @@
+torch==2.0.1
+torchaudio==2.0.2
+numpy
+scipy
+loguru
+deepfilternet
+gradio
+soundfile
+librosa
+pydub
+PyQt6
+pyqtgraph
+sounddevice
+pesq
