@@ -13,7 +13,7 @@ from PyQt6.QtCore import QObject, QRectF, QRunnable, QSize, Qt, QThreadPool, QTi
 from PyQt6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (
     QApplication,
-    QComboBox,
+    QDialog,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
@@ -27,7 +27,6 @@ from PyQt6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QSizePolicy,
-    QSplitter,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -35,7 +34,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from audio_backend import ComparisonResult, MMSEParameters, compare_denoising_algorithms, compute_spectrogram, load_audio_file, run_denoise_algorithm
+from audio_backend import ComparisonResult, MMSEParameters, compare_denoising_algorithms, compute_spectrogram, load_audio_file
 
 
 pg.setConfigOptions(antialias=True)
@@ -112,10 +111,10 @@ QPushButton {
     border-radius: 12px;
     color: #ffffff;
     font-family: 'Microsoft YaHei UI';
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 500;
-    min-height: 30px;
-    padding: 2px 10px;
+    min-height: 24px;
+    padding: 1px 8px;
 }
 QPushButton:hover {
     background: #0077ed;
@@ -141,14 +140,14 @@ QPushButton#SecondaryButton:hover {
 QComboBox, QTableWidget {
     background: #ffffff;
     border: 1px solid #d2d2d7;
-    border-radius: 12px;
-    padding: 8px;
+    border-radius: 10px;
+    padding: 6px;
 }
 QDoubleSpinBox {
     background: #ffffff;
     border: 1px solid #d2d2d7;
-    border-radius: 12px;
-    padding: 6px 24px 6px 8px;
+    border-radius: 10px;
+    padding: 4px 20px 4px 8px;
 }
 QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {
     width: 18px;
@@ -165,7 +164,7 @@ QTabBar::tab {
     background: #ececf1;
     border-top-left-radius: 12px;
     border-top-right-radius: 12px;
-    padding: 12px 20px;
+    padding: 8px 14px;
     margin-right: 8px;
     color: #6e6e73;
 }
@@ -280,6 +279,76 @@ class WaveformCard(PlotCard):
         view_box.setYRange(-amplitude, amplitude, padding=0.04)
 
 
+class ComparisonWaveformCard(PlotCard):
+    def __init__(self, title: str) -> None:
+        super().__init__(title)
+        self.plot = pg.PlotWidget()
+        self.plot.setBackground("#f8fbff")
+        self.plot.showGrid(x=True, y=True, alpha=0.12)
+        self.plot.setMenuEnabled(False)
+        self.plot.setMouseEnabled(x=False, y=False)
+        self.plot.hideButtons()
+        self.plot.setClipToView(True)
+        self.plot.getViewBox().setBorder(pg.mkPen("#d7e0ea", width=1.2))
+        self.plot.getAxis("left").setTextPen(pg.mkPen("#8e8e93"))
+        self.plot.getAxis("bottom").setTextPen(pg.mkPen("#8e8e93"))
+        self.plot.setLabel("left", "Amp")
+        self.plot.setLabel("bottom", "Time")
+        self.noisy_curve = self.plot.plot(pen=pg.mkPen("#0a84ff", width=1.8), name="原始")
+        self.deepfilter_curve = self.plot.plot(pen=pg.mkPen("#30d158", width=1.8), name="DeepFilter")
+        self.mmse_curve = self.plot.plot(pen=pg.mkPen("#ff9f0a", width=1.8), name="MMSE")
+        self.card_layout.addWidget(self.plot)
+        self._show_placeholder()
+
+    def _show_placeholder(self) -> None:
+        x = np.array([0.0, 1.0], dtype=np.float32)
+        y = np.zeros(2, dtype=np.float32)
+        self.noisy_curve.setData(x, y)
+        self.deepfilter_curve.setData(x, y)
+        self.mmse_curve.setData(x, y)
+        view_box = self.plot.getViewBox()
+        view_box.setXRange(0.0, 1.0, padding=0.01)
+        view_box.setYRange(-0.25, 0.25, padding=0.02)
+
+    def _resolve_amplitude_range(self, samples: np.ndarray) -> float:
+        peak = float(np.max(np.abs(samples))) if samples.size else 0.0
+        if peak <= 0.0:
+            return 0.25
+        if peak < 0.05:
+            return 0.06
+        return min(1.05, peak * 1.18)
+
+    def set_signals(self, noisy: np.ndarray, deepfilter: np.ndarray, mmse: np.ndarray, sample_rate: int) -> None:
+        if noisy.size == 0 and deepfilter.size == 0 and mmse.size == 0:
+            self._show_placeholder()
+            return
+
+        noisy_idx, noisy_clip = decimate_signal(noisy)
+        deep_idx, deep_clip = decimate_signal(deepfilter)
+        mmse_idx, mmse_clip = decimate_signal(mmse)
+
+        noisy_x = noisy_idx / float(sample_rate) if noisy_idx.size else np.zeros(1, dtype=np.float32)
+        deep_x = deep_idx / float(sample_rate) if deep_idx.size else np.zeros(1, dtype=np.float32)
+        mmse_x = mmse_idx / float(sample_rate) if mmse_idx.size else np.zeros(1, dtype=np.float32)
+
+        self.noisy_curve.setData(noisy_x, noisy_clip)
+        self.deepfilter_curve.setData(deep_x, deep_clip)
+        self.mmse_curve.setData(mmse_x, mmse_clip)
+
+        max_duration = max(
+            float(noisy_x.max()) if noisy_x.size else 0.0,
+            float(deep_x.max()) if deep_x.size else 0.0,
+            float(mmse_x.max()) if mmse_x.size else 0.0,
+            0.25,
+        )
+        amplitude = self._resolve_amplitude_range(
+            np.concatenate([arr for arr in [noisy_clip, deep_clip, mmse_clip] if arr.size])
+        )
+        view_box = self.plot.getViewBox()
+        view_box.setXRange(0.0, max_duration, padding=0.01)
+        view_box.setYRange(-amplitude, amplitude, padding=0.04)
+
+
 class SpectrogramCard(PlotCard):
     def __init__(self, title: str) -> None:
         super().__init__(title)
@@ -330,26 +399,26 @@ class AnimatedTitle(QWidget):
         self._timer.setInterval(40)
         self._timer.timeout.connect(self._advance_animation)
         self._timer.start()
-        self.setMinimumHeight(116)
+        self.setMinimumHeight(72)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
     def sizeHint(self) -> QSize:
-        return QSize(920, 124)
+        return QSize(920, 76)
 
     def _advance_animation(self) -> None:
         self._phase = (self._phase + 0.018) % 1.0
         self.update()
 
     def _title_font(self) -> QFont:
-        font = QFont("Segoe UI Variable", 34)
+        font = QFont("Segoe UI Variable", 24)
         font.setBold(True)
         width = max(self.width() - 32, 240)
         if width < 760:
-            font.setPointSize(28)
-        if width < 620:
-            font.setPointSize(24)
-        if width < 500:
             font.setPointSize(20)
+        if width < 620:
+            font.setPointSize(17)
+        if width < 500:
+            font.setPointSize(15)
         return font
 
     def paintEvent(self, _event) -> None:
@@ -421,38 +490,6 @@ class WorkerSignals(QObject):
     error = pyqtSignal(str)
 
 
-class PreviewTask(QRunnable):
-    def __init__(
-        self,
-        algorithm: str,
-        samples: np.ndarray,
-        sample_rate: int,
-        model_dir: Path,
-        mmse_parameters: MMSEParameters | None,
-    ) -> None:
-        super().__init__()
-        self.algorithm = algorithm
-        self.samples = samples.astype(np.float32, copy=True)
-        self.sample_rate = sample_rate
-        self.model_dir = model_dir
-        self.mmse_parameters = mmse_parameters
-        self.signals = WorkerSignals()
-
-    def run(self) -> None:
-        try:
-            output = run_denoise_algorithm(
-                self.algorithm,
-                self.samples,
-                self.sample_rate,
-                model_dir=self.model_dir,
-                mmse_parameters=self.mmse_parameters,
-            )
-        except Exception as exc:
-            self.signals.error.emit(str(exc))
-            return
-        self.signals.finished.emit((self.algorithm, output, self.sample_rate))
-
-
 class ComparisonTask(QRunnable):
     def __init__(
         self,
@@ -504,20 +541,18 @@ class DenoiseStudio(QMainWindow):
         self.capture_stream: sd.InputStream | None = None
         self.captured_chunks: list[np.ndarray] = []
         self.live_input_buffer = np.zeros(0, dtype=np.float32)
-        self.live_output_buffer = np.zeros(0, dtype=np.float32)
         self.noisy_asset: AudioAsset | None = None
         self.reference_asset: AudioAsset | None = None
         self.result: ComparisonResult | None = None
         self.is_recording = False
-        self.preview_busy = False
         self.processing_busy = False
         self.total_captured_frames = 0
-        self.last_preview_frames = 0
 
         self.setWindowTitle("信号与系统2课程项目 by cyx")
-        self.resize(1580, 980)
-        self.setMinimumSize(1360, 860)
+        self.resize(1360, 860)
+        self.setMinimumSize(1120, 700)
         self._build_ui()
+        self._refresh_record_toggle_button()
         self._bind_timers()
         self._clear_reference_views()
         self._show_metrics_as_unavailable()
@@ -552,16 +587,12 @@ class DenoiseStudio(QMainWindow):
         self.clear_reference_button = QPushButton("清空参考语音")
         self.clear_reference_button.setObjectName("SecondaryButton")
         self.clear_reference_button.setEnabled(False)
-        self.record_button = QPushButton("开始录音")
-        self.stop_button = QPushButton("停止录音")
-        self.stop_button.setObjectName("SecondaryButton")
-        self.stop_button.setEnabled(False)
+        self.record_toggle_button = QPushButton("●录")
+        self.record_toggle_button.setObjectName("SecondaryButton")
+        self.record_toggle_button.setMaximumWidth(64)
+        self.record_toggle_button.setMinimumWidth(56)
+        self.record_toggle_button.setToolTip("点击开始/停止录音")
         self.process_button = QPushButton("开始降噪")
-
-        self.preview_combo = QComboBox()
-        self.preview_combo.addItem("实时预览: MMSE", "mmse")
-        self.preview_combo.addItem("实时预览: DeepFilterNet2", "deepfilter")
-        self.preview_combo.setMinimumWidth(190)
 
         self.mmse_suppression_spin = QDoubleSpinBox()
         self.mmse_suppression_spin.setRange(0.0, 1.0)
@@ -599,45 +630,112 @@ class DenoiseStudio(QMainWindow):
         self.progress_bar.setValue(0)
         self.progress_bar.setVisible(False)
         self.progress_bar.setMaximumWidth(240)
+        self.advanced_button = QPushButton("高级功能")
+        self.advanced_button.setObjectName("SecondaryButton")
+        self.advanced_button.setMaximumWidth(92)
+
+        self.workflow_hint_label.setVisible(True)
+        self.result_hint_label.setVisible(True)
 
         for button in [
             self.load_noisy_button,
             self.add_gaussian_noise_button,
             self.load_reference_button,
             self.clear_reference_button,
-            self.record_button,
-            self.stop_button,
+            self.record_toggle_button,
             self.process_button,
+            self.advanced_button,
             self.play_noisy_button,
             self.play_deepfilter_button,
             self.play_mmse_button,
         ]:
-            button.setMinimumHeight(28)
+            button.setMinimumHeight(24)
+
+    def _create_advanced_dialog(self) -> QDialog:
+        dialog = QDialog(self)
+        dialog.setWindowTitle("高级功能")
+        dialog.setModal(False)
+        dialog.resize(560, 420)
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(10)
+
+        reference_card = QFrame()
+        reference_card.setObjectName("Card")
+        reference_layout = QVBoxLayout(reference_card)
+        reference_layout.setContentsMargins(12, 10, 12, 10)
+        reference_layout.setSpacing(8)
+        reference_title = QLabel("参考语音")
+        reference_title.setObjectName("SectionTitle")
+        reference_row = QHBoxLayout()
+        reference_row.setContentsMargins(0, 0, 0, 0)
+        reference_row.setSpacing(8)
+        reference_row.addWidget(self.load_reference_button)
+        reference_row.addWidget(self.clear_reference_button)
+        reference_row.addWidget(self.reference_file_label, 1)
+        reference_layout.addWidget(reference_title)
+        reference_layout.addLayout(reference_row)
+
+        mmse_card = QFrame()
+        mmse_card.setObjectName("Card")
+        mmse_layout = QVBoxLayout(mmse_card)
+        mmse_layout.setContentsMargins(12, 10, 12, 10)
+        mmse_layout.setSpacing(8)
+        mmse_title = QLabel("MMSE 参数")
+        mmse_title.setObjectName("SectionTitle")
+        mmse_form = QFormLayout()
+        mmse_form.setContentsMargins(0, 0, 0, 0)
+        mmse_form.setHorizontalSpacing(12)
+        mmse_form.setVerticalSpacing(8)
+        mmse_form.addRow("MMSE 抑制", self.mmse_suppression_spin)
+        mmse_form.addRow("MMSE 平滑", self.mmse_smoothing_spin)
+        mmse_form.addRow("MMSE 保真", self.mmse_protection_spin)
+        mmse_layout.addWidget(mmse_title)
+        mmse_layout.addLayout(mmse_form)
+
+        hint_card = QFrame()
+        hint_card.setObjectName("Card")
+        hint_layout = QVBoxLayout(hint_card)
+        hint_layout.setContentsMargins(12, 10, 12, 10)
+        hint_layout.setSpacing(8)
+        hint_title = QLabel("状态提示")
+        hint_title.setObjectName("SectionTitle")
+        hint_layout.addWidget(hint_title)
+        hint_layout.addWidget(self.workflow_hint_label)
+        hint_layout.addWidget(self.result_hint_label)
+        hint_layout.addWidget(self.progress_bar)
+
+        layout.addWidget(reference_card)
+        layout.addWidget(mmse_card)
+        layout.addWidget(hint_card)
+        return dialog
 
     def _build_ui(self) -> None:
         root = QWidget()
         self.setCentralWidget(root)
         outer = QVBoxLayout(root)
-        outer.setContentsMargins(24, 24, 24, 24)
-        outer.setSpacing(18)
+        outer.setContentsMargins(16, 16, 16, 16)
+        outer.setSpacing(12)
 
         self._create_shared_controls()
+        self.advanced_dialog = self._create_advanced_dialog()
 
         header = QFrame()
         header.setObjectName("Card")
         header_layout = QVBoxLayout(header)
-        header_layout.setContentsMargins(26, 24, 26, 24)
-        header_layout.setSpacing(14)
+        header_layout.setContentsMargins(18, 14, 18, 14)
+        header_layout.setSpacing(10)
 
         top_row = QHBoxLayout()
         top_row.setContentsMargins(0, 0, 0, 0)
-        top_row.setSpacing(18)
+        top_row.setSpacing(12)
 
         title_panel = QVBoxLayout()
         title_panel.setContentsMargins(0, 0, 0, 0)
         title_panel.setSpacing(6)
         title_label = AnimatedTitle("信号与系统2课程项目 by cyx")
-        subtitle_label = QLabel("多标签页语音增强工作区，分离控制、时域、频谱和评估视图")
+        subtitle_label = QLabel("极简语音降噪界面：主界面聚焦输入波形与关键按钮")
         subtitle_label.setObjectName("Subtitle")
         title_panel.addWidget(title_label)
         title_panel.addWidget(subtitle_label)
@@ -654,82 +752,64 @@ class DenoiseStudio(QMainWindow):
 
         asset_row = QHBoxLayout()
         asset_row.setContentsMargins(0, 0, 0, 0)
-        asset_row.setSpacing(18)
+        asset_row.setSpacing(12)
         asset_row.addWidget(self.noisy_file_label, 1)
-        asset_row.addWidget(self.reference_file_label, 1)
         header_layout.addLayout(asset_row)
 
         toolbar_panel = QFrame()
         toolbar_panel.setObjectName("HeaderPanel")
         toolbar_layout = QVBoxLayout(toolbar_panel)
-        toolbar_layout.setContentsMargins(16, 14, 16, 14)
-        toolbar_layout.setSpacing(12)
+        toolbar_layout.setContentsMargins(12, 10, 12, 10)
+        toolbar_layout.setSpacing(8)
 
         controls_grid = QGridLayout()
         controls_grid.setContentsMargins(0, 0, 0, 0)
-        controls_grid.setHorizontalSpacing(16)
-        controls_grid.setVerticalSpacing(10)
+        controls_grid.setHorizontalSpacing(10)
+        controls_grid.setVerticalSpacing(8)
 
-        source_panel = QFrame()
-        source_layout = QVBoxLayout(source_panel)
-        source_layout.setContentsMargins(0, 0, 0, 0)
-        source_layout.setSpacing(8)
-        source_caption = QLabel("输入与运行")
-        source_caption.setObjectName("HeaderCaption")
-        source_buttons = QGridLayout()
-        source_buttons.setContentsMargins(0, 0, 0, 0)
-        source_buttons.setHorizontalSpacing(12)
-        source_buttons.setVerticalSpacing(10)
-        source_buttons.addWidget(self.load_noisy_button, 0, 0)
-        source_buttons.addWidget(self.add_gaussian_noise_button, 0, 1)
-        source_buttons.addWidget(self.load_reference_button, 0, 2)
-        source_buttons.addWidget(self.clear_reference_button, 0, 3)
-        source_buttons.addWidget(self.record_button, 1, 0)
-        source_buttons.addWidget(self.stop_button, 1, 1)
-        source_buttons.addWidget(self.process_button, 1, 2, 1, 2)
-        source_buttons.setColumnStretch(0, 1)
-        source_buttons.setColumnStretch(1, 1)
-        source_buttons.setColumnStretch(2, 1)
-        source_buttons.setColumnStretch(3, 1)
-        source_layout.addWidget(source_caption)
-        source_layout.addLayout(source_buttons)
+        quick_panel = QFrame()
+        quick_layout = QVBoxLayout(quick_panel)
+        quick_layout.setContentsMargins(0, 0, 0, 0)
+        quick_layout.setSpacing(6)
+        quick_caption = QLabel("关键操作")
+        quick_caption.setObjectName("HeaderCaption")
+        quick_buttons = QGridLayout()
+        quick_buttons.setContentsMargins(0, 0, 0, 0)
+        quick_buttons.setHorizontalSpacing(8)
+        quick_buttons.setVerticalSpacing(6)
+        quick_buttons.addWidget(self.load_noisy_button, 0, 0)
+        quick_buttons.addWidget(self.record_toggle_button, 0, 1)
+        quick_buttons.addWidget(self.add_gaussian_noise_button, 0, 2)
+        quick_buttons.addWidget(self.play_noisy_button, 0, 3)
+        quick_buttons.addWidget(self.process_button, 0, 4)
+        for index in range(5):
+            quick_buttons.setColumnStretch(index, 1)
 
-        tuning_panel = QFrame()
-        tuning_layout = QVBoxLayout(tuning_panel)
-        tuning_layout.setContentsMargins(0, 0, 0, 0)
-        tuning_layout.setSpacing(8)
-        tuning_caption = QLabel("预览与试听")
-        tuning_caption.setObjectName("HeaderCaption")
-        tuning_row = QHBoxLayout()
-        tuning_row.setContentsMargins(0, 0, 0, 0)
-        tuning_row.setSpacing(10)
-        for caption, widget in [
-            ("预览", self.preview_combo),
-            ("抑制", self.mmse_suppression_spin),
-            ("平滑", self.mmse_smoothing_spin),
-            ("保真", self.mmse_protection_spin),
-        ]:
-            label = QLabel(caption)
-            label.setObjectName("HeaderCaption")
-            tuning_row.addWidget(label)
-            tuning_row.addWidget(widget)
+        self.post_denoise_panel = QWidget()
+        post_denoise_layout = QHBoxLayout(self.post_denoise_panel)
+        post_denoise_layout.setContentsMargins(0, 0, 0, 0)
+        post_denoise_layout.setSpacing(8)
+        post_denoise_label = QLabel("降噪后试听")
+        post_denoise_label.setObjectName("HeaderCaption")
+        post_denoise_layout.addWidget(post_denoise_label)
+        post_denoise_layout.addWidget(self.play_deepfilter_button)
+        post_denoise_layout.addWidget(self.play_mmse_button)
+        post_denoise_layout.addWidget(self.progress_bar, 1)
+        self.post_denoise_panel.setVisible(False)
 
-        playback_row = QHBoxLayout()
-        playback_row.setContentsMargins(0, 0, 0, 0)
-        playback_row.setSpacing(10)
-        playback_row.addWidget(self.play_noisy_button)
-        playback_row.addWidget(self.play_deepfilter_button)
-        playback_row.addWidget(self.play_mmse_button)
-        playback_row.addWidget(self.progress_bar, 1)
+        quick_layout.addWidget(quick_caption)
+        quick_layout.addLayout(quick_buttons)
+        quick_layout.addWidget(self.post_denoise_panel)
 
-        tuning_layout.addWidget(tuning_caption)
-        tuning_layout.addLayout(tuning_row)
-        tuning_layout.addLayout(playback_row)
+        advanced_row = QHBoxLayout()
+        advanced_row.setContentsMargins(0, 0, 0, 0)
+        advanced_row.setSpacing(8)
+        advanced_row.addWidget(self.advanced_button)
+        advanced_row.addStretch(1)
 
-        controls_grid.addWidget(source_panel, 0, 0)
-        controls_grid.addWidget(tuning_panel, 0, 1)
-        controls_grid.setColumnStretch(0, 5)
-        controls_grid.setColumnStretch(1, 4)
+        controls_grid.addWidget(quick_panel, 0, 0)
+        controls_grid.addLayout(advanced_row, 1, 0)
+        controls_grid.setColumnStretch(0, 1)
 
         toolbar_layout.addLayout(controls_grid)
         header_layout.addWidget(toolbar_panel)
@@ -738,24 +818,47 @@ class DenoiseStudio(QMainWindow):
         self.main_tabs = QTabWidget()
         outer.addWidget(self.main_tabs, 1)
 
-        self.main_tabs.addTab(self._create_workbench_tab(), "工作台")
-        self.main_tabs.addTab(self._create_waveform_tab(), "时域波形")
-        self.main_tabs.addTab(self._create_spectrogram_tab(), "频谱图")
-        self.main_tabs.addTab(self._create_evaluation_tab(), "评估与诊断")
+        self.main_tabs.addTab(self._create_workbench_tab(), "开始页")
+        self.main_tabs.addTab(self._create_waveform_result_tab(), "波形")
+        self.main_tabs.addTab(self._create_spectrogram_result_tab(), "频谱")
+        self.main_tabs.addTab(self._create_evaluation_result_tab(), "客观评估")
+        self._set_result_tabs_visible(False)
 
         self.load_noisy_button.clicked.connect(self.load_noisy_audio)
         self.add_gaussian_noise_button.clicked.connect(self.add_gaussian_noise)
         self.load_reference_button.clicked.connect(self.load_reference_audio)
         self.clear_reference_button.clicked.connect(self.clear_reference_audio)
-        self.record_button.clicked.connect(self.start_recording)
-        self.stop_button.clicked.connect(self.stop_recording)
+        self.record_toggle_button.clicked.connect(self._toggle_recording)
         self.process_button.clicked.connect(self.run_comparison)
         self.play_noisy_button.clicked.connect(lambda: self.play_variant("noisy"))
         self.play_deepfilter_button.clicked.connect(lambda: self.play_variant("deepfilter"))
         self.play_mmse_button.clicked.connect(lambda: self.play_variant("mmse"))
+        self.advanced_button.clicked.connect(self._open_advanced_dialog)
         self.mmse_suppression_spin.valueChanged.connect(self._handle_mmse_parameters_changed)
         self.mmse_smoothing_spin.valueChanged.connect(self._handle_mmse_parameters_changed)
         self.mmse_protection_spin.valueChanged.connect(self._handle_mmse_parameters_changed)
+
+    def _open_advanced_dialog(self) -> None:
+        self.advanced_dialog.show()
+        self.advanced_dialog.raise_()
+        self.advanced_dialog.activateWindow()
+
+    def _set_post_denoise_controls_visible(self, visible: bool) -> None:
+        self.post_denoise_panel.setVisible(visible)
+
+    def _set_result_tabs_visible(self, visible: bool) -> None:
+        for index in [1, 2, 3]:
+            self.main_tabs.setTabVisible(index, visible)
+
+    def _toggle_recording(self) -> None:
+        if self.is_recording:
+            self.stop_recording()
+        else:
+            self.start_recording()
+
+    def _refresh_record_toggle_button(self) -> None:
+        self.record_toggle_button.setText("■停" if self.is_recording else "●录")
+        self.record_toggle_button.setEnabled(not self.processing_busy or self.is_recording)
 
     def _create_workbench_tab(self) -> QWidget:
         page = QWidget()
@@ -768,74 +871,108 @@ class DenoiseStudio(QMainWindow):
         live_card_layout = QVBoxLayout(live_card)
         live_card_layout.setContentsMargins(20, 16, 20, 18)
         live_card_layout.setSpacing(10)
-        live_title = QLabel("实时波形主视图")
+        live_title = QLabel("实时输入波形")
         live_title.setObjectName("SectionTitle")
-        live_hint = QLabel("导入、录音、参数调整与运行控制已上移到标题区，工作台主体只保留实时波形。")
+        live_hint = QLabel("主界面仅展示输入波形；开始降噪后自动切换到结果页查看前后对比与效果评价。")
         live_hint.setObjectName("HintText")
         live_hint.setWordWrap(True)
         live_card_layout.addWidget(live_title)
         live_card_layout.addWidget(live_hint)
 
-        self.live_input_card = WaveformCard("实时输入波形", "#0a84ff")
-        self.live_output_card = WaveformCard("实时降噪波形", "#30d158")
-        self.live_input_card.setMinimumHeight(180)
-        self.live_output_card.setMinimumHeight(180)
+        self.live_input_card = WaveformCard("输入波形", "#0a84ff")
+        self.live_input_card.setMinimumHeight(420)
         self.live_input_card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.live_output_card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-
-        waveform_splitter = QSplitter(Qt.Orientation.Vertical)
-        waveform_splitter.setChildrenCollapsible(False)
-        waveform_splitter.setHandleWidth(8)
-        waveform_splitter.addWidget(self.live_input_card)
-        waveform_splitter.addWidget(self.live_output_card)
-        waveform_splitter.setStretchFactor(0, 1)
-        waveform_splitter.setStretchFactor(1, 1)
-        waveform_splitter.setSizes([360, 360])
-        live_card_layout.addWidget(waveform_splitter, 1)
+        live_card_layout.addWidget(self.live_input_card, 1)
         layout.addWidget(live_card, 1)
         return page
 
-    def _create_waveform_tab(self) -> QWidget:
+    def _create_waveform_result_tab(self) -> QWidget:
         page = QWidget()
-        layout = QGridLayout(page)
+        layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(18)
-        self.noisy_wave_card = WaveformCard("原始输入时域", "#0582ff")
-        self.deepfilter_wave_card = WaveformCard("DeepFilterNet2 时域", "#30d158")
-        self.mmse_wave_card = WaveformCard("MMSE 时域", "#ff9f0a")
-        self.reference_wave_card = WaveformCard("参考语音时域", "#bf5af2")
-        layout.addWidget(self.noisy_wave_card, 0, 0)
-        layout.addWidget(self.deepfilter_wave_card, 0, 1)
-        layout.addWidget(self.mmse_wave_card, 1, 0)
-        layout.addWidget(self.reference_wave_card, 1, 1)
+        layout.setSpacing(12)
+
+        title = QLabel("降噪前后波形对比")
+        title.setObjectName("SectionTitle")
+        layout.addWidget(title)
+
+        card = QFrame()
+        card.setObjectName("Card")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 14, 16, 14)
+        card_layout.setSpacing(12)
+
+        waveform_grid = QGridLayout()
+        waveform_grid.setContentsMargins(0, 0, 0, 0)
+        waveform_grid.setSpacing(12)
+        self.noisy_wave_card = WaveformCard("原始输入", "#0582ff")
+        self.deepfilter_wave_card = WaveformCard("DeepFilterNet2", "#30d158")
+        self.mmse_wave_card = WaveformCard("MMSE", "#ff9f0a")
+        self.comparison_wave_card = ComparisonWaveformCard("降噪效果评价波形（叠加）")
+        for widget in [self.noisy_wave_card, self.deepfilter_wave_card, self.mmse_wave_card, self.comparison_wave_card]:
+            widget.setMinimumHeight(240)
+        waveform_grid.addWidget(self.noisy_wave_card, 0, 0)
+        waveform_grid.addWidget(self.deepfilter_wave_card, 0, 1)
+        waveform_grid.addWidget(self.mmse_wave_card, 1, 0)
+        waveform_grid.addWidget(self.comparison_wave_card, 1, 1)
+        card_layout.addLayout(waveform_grid)
+        layout.addWidget(card, 1)
         return page
 
-    def _create_spectrogram_tab(self) -> QWidget:
+    def _create_spectrogram_result_tab(self) -> QWidget:
         page = QWidget()
-        layout = QGridLayout(page)
+        layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(18)
-        self.noisy_spec_card = SpectrogramCard("原始输入频谱图")
-        self.deepfilter_spec_card = SpectrogramCard("DeepFilterNet2 频谱图")
-        self.mmse_spec_card = SpectrogramCard("MMSE 频谱图")
+        layout.setSpacing(12)
+
+        title = QLabel("去噪前后频谱图")
+        title.setObjectName("SectionTitle")
+        layout.addWidget(title)
+
+        card = QFrame()
+        card.setObjectName("Card")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 14, 16, 14)
+        card_layout.setSpacing(12)
+
+        spectrogram_grid = QGridLayout()
+        spectrogram_grid.setContentsMargins(0, 0, 0, 0)
+        spectrogram_grid.setSpacing(12)
+        self.noisy_spec_card = SpectrogramCard("去噪前（原始输入）")
+        self.deepfilter_spec_card = SpectrogramCard("去噪后（DeepFilterNet2）")
+        self.mmse_spec_card = SpectrogramCard("去噪后（MMSE）")
         self.reference_spec_card = SpectrogramCard("参考语音频谱图")
-        layout.addWidget(self.noisy_spec_card, 0, 0)
-        layout.addWidget(self.deepfilter_spec_card, 0, 1)
-        layout.addWidget(self.mmse_spec_card, 1, 0)
-        layout.addWidget(self.reference_spec_card, 1, 1)
+        for widget in [self.noisy_spec_card, self.deepfilter_spec_card, self.mmse_spec_card, self.reference_spec_card]:
+            widget.setMinimumHeight(240)
+        spectrogram_grid.addWidget(self.noisy_spec_card, 0, 0)
+        spectrogram_grid.addWidget(self.deepfilter_spec_card, 0, 1)
+        spectrogram_grid.addWidget(self.mmse_spec_card, 1, 0)
+        spectrogram_grid.addWidget(self.reference_spec_card, 1, 1)
+        card_layout.addLayout(spectrogram_grid)
+        layout.addWidget(card, 1)
         return page
 
-    def _create_evaluation_tab(self) -> QWidget:
+    def _create_evaluation_result_tab(self) -> QWidget:
         page = QWidget()
         layout = QHBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(18)
+        layout.setSpacing(12)
+
+        metrics_container = QFrame()
+        metrics_container.setObjectName("Card")
+        metrics_container_layout = QVBoxLayout(metrics_container)
+        metrics_container_layout.setContentsMargins(16, 14, 16, 14)
+        metrics_container_layout.setSpacing(12)
+
+        self.reference_wave_card = WaveformCard("参考语音时域", "#bf5af2")
+        self.reference_wave_card.setMinimumHeight(220)
+        metrics_container_layout.addWidget(self.reference_wave_card)
 
         metrics_card = QFrame()
         metrics_card.setObjectName("Card")
         metrics_layout = QVBoxLayout(metrics_card)
-        metrics_layout.setContentsMargins(18, 18, 18, 18)
-        metrics_layout.setSpacing(14)
+        metrics_layout.setContentsMargins(14, 12, 14, 12)
+        metrics_layout.setSpacing(10)
         metrics_title = QLabel("客观评估")
         metrics_title.setObjectName("SectionTitle")
         self.metrics_hint = QLabel("导入参考语音后，会计算 SNR、SegSNR、PESQ；未导入时仍可完成增强与对比。")
@@ -853,12 +990,13 @@ class DenoiseStudio(QMainWindow):
         metrics_layout.addWidget(metrics_title)
         metrics_layout.addWidget(self.metrics_hint)
         metrics_layout.addWidget(self.metrics_table, 1)
+        metrics_container_layout.addWidget(metrics_card, 1)
 
         diagnosis_card = QFrame()
         diagnosis_card.setObjectName("Card")
         diagnosis_layout = QVBoxLayout(diagnosis_card)
-        diagnosis_layout.setContentsMargins(18, 18, 18, 18)
-        diagnosis_layout.setSpacing(14)
+        diagnosis_layout.setContentsMargins(16, 14, 16, 14)
+        diagnosis_layout.setSpacing(12)
         diagnosis_title = QLabel("噪声诊断")
         diagnosis_title.setObjectName("SectionTitle")
         self.diagnosis_label = QLabel("等待频谱分析")
@@ -867,7 +1005,7 @@ class DenoiseStudio(QMainWindow):
         diagnosis_layout.addWidget(diagnosis_title)
         diagnosis_layout.addWidget(self.diagnosis_label, 1)
 
-        layout.addWidget(metrics_card, 3)
+        layout.addWidget(metrics_container, 3)
         layout.addWidget(diagnosis_card, 2)
         return page
 
@@ -980,10 +1118,6 @@ class DenoiseStudio(QMainWindow):
         )
 
     def _handle_mmse_parameters_changed(self) -> None:
-        if self.is_recording and str(self.preview_combo.currentData()) == "mmse" and not self.preview_busy:
-            self.last_preview_frames = 0
-            self._schedule_preview()
-            return
         if self.result is not None:
             self._set_status("MMSE 参数已更新，请重新开始降噪以刷新结果")
             self.result_hint_label.setText("MMSE 参数已变更。请重新点击“开始降噪”，频谱图和指标会按新参数刷新。")
@@ -991,8 +1125,7 @@ class DenoiseStudio(QMainWindow):
     def _set_processing_state(self, busy: bool) -> None:
         self.processing_busy = busy
         self.process_button.setEnabled(not busy)
-        self.record_button.setEnabled(not busy and not self.is_recording)
-        self.stop_button.setEnabled(self.is_recording)
+        self._refresh_record_toggle_button()
         self._sync_header_quick_actions()
         self.progress_bar.setVisible(busy)
         if busy:
@@ -1018,7 +1151,6 @@ class DenoiseStudio(QMainWindow):
         self.stop_recording(silent=True)
         self.noisy_asset = AudioAsset(samples=samples, sample_rate=sample_rate, name=Path(path).name)
         self.live_input_buffer = samples[-sample_rate * 3 :]
-        self.live_output_buffer = np.zeros(0, dtype=np.float32)
         self.result = None
         self._set_status(f"已载入待处理音频: {self.noisy_asset.name}")
         self.workflow_hint_label.setText("输入音频已就绪。可在步骤 2 调整 MMSE 参数，或直接在步骤 3 开始降噪。")
@@ -1026,11 +1158,23 @@ class DenoiseStudio(QMainWindow):
         self.noisy_file_label.setText(f"当前待处理音频: {self.noisy_asset.name}")
         self._set_input_source_badge(f"当前输入来源: 文件导入 · {self.noisy_asset.name}")
         self.live_input_card.set_signal(self.live_input_buffer, sample_rate)
-        self.live_output_card.set_signal(np.zeros(0, dtype=np.float32), sample_rate)
         self.noisy_wave_card.set_signal(samples, sample_rate)
+        self.deepfilter_wave_card.set_signal(np.zeros(0, dtype=np.float32), sample_rate)
+        self.mmse_wave_card.set_signal(np.zeros(0, dtype=np.float32), sample_rate)
+        self.comparison_wave_card.set_signals(
+            np.zeros(0, dtype=np.float32),
+            np.zeros(0, dtype=np.float32),
+            np.zeros(0, dtype=np.float32),
+            sample_rate,
+        )
         if self.reference_asset is None:
             self._show_metrics_as_unavailable()
         self.play_noisy_button.setEnabled(True)
+        self.play_deepfilter_button.setEnabled(False)
+        self.play_mmse_button.setEnabled(False)
+        self._set_post_denoise_controls_visible(False)
+        self._set_result_tabs_visible(False)
+        self.main_tabs.setCurrentIndex(0)
         self._sync_header_quick_actions()
 
     def add_gaussian_noise(self) -> None:
@@ -1059,7 +1203,6 @@ class DenoiseStudio(QMainWindow):
 
         self.noisy_asset = AudioAsset(samples=noisy_samples, sample_rate=asset.sample_rate, name=f"{asset.name} + 高斯噪声")
         self.live_input_buffer = noisy_samples[-asset.sample_rate * 3 :]
-        self.live_output_buffer = np.zeros(0, dtype=np.float32)
         self.result = None
 
         self.noisy_file_label.setText(f"当前待处理音频: {self.noisy_asset.name}")
@@ -1069,14 +1212,24 @@ class DenoiseStudio(QMainWindow):
         self.result_hint_label.setText("输入已改变，旧结果已失效。请重新点击“开始降噪”刷新双算法对比。")
 
         self.live_input_card.set_signal(self.live_input_buffer, asset.sample_rate)
-        self.live_output_card.set_signal(np.zeros(0, dtype=np.float32), asset.sample_rate)
         self.noisy_wave_card.set_signal(noisy_samples, asset.sample_rate)
+        self.deepfilter_wave_card.set_signal(np.zeros(0, dtype=np.float32), asset.sample_rate)
+        self.mmse_wave_card.set_signal(np.zeros(0, dtype=np.float32), asset.sample_rate)
+        self.comparison_wave_card.set_signals(
+            np.zeros(0, dtype=np.float32),
+            np.zeros(0, dtype=np.float32),
+            np.zeros(0, dtype=np.float32),
+            asset.sample_rate,
+        )
         if self.reference_asset is None:
             self._show_metrics_as_unavailable()
 
         self.play_noisy_button.setEnabled(True)
         self.play_deepfilter_button.setEnabled(False)
         self.play_mmse_button.setEnabled(False)
+        self._set_post_denoise_controls_visible(False)
+        self._set_result_tabs_visible(False)
+        self.main_tabs.setCurrentIndex(0)
         self._sync_header_quick_actions()
 
     def load_reference_audio(self) -> None:
@@ -1117,9 +1270,7 @@ class DenoiseStudio(QMainWindow):
         self.audio_queue = queue.Queue()
         self.captured_chunks = []
         self.live_input_buffer = np.zeros(0, dtype=np.float32)
-        self.live_output_buffer = np.zeros(0, dtype=np.float32)
         self.total_captured_frames = 0
-        self.last_preview_frames = 0
         try:
             self.capture_stream = sd.InputStream(
                 samplerate=48000,
@@ -1136,16 +1287,18 @@ class DenoiseStudio(QMainWindow):
         self.is_recording = True
         self.noisy_asset = None
         self.result = None
-        self.record_button.setEnabled(False)
-        self.stop_button.setEnabled(True)
+        self._refresh_record_toggle_button()
         self.play_noisy_button.setEnabled(False)
         self.play_deepfilter_button.setEnabled(False)
         self.play_mmse_button.setEnabled(False)
+        self._set_post_denoise_controls_visible(False)
+        self._set_result_tabs_visible(False)
+        self.main_tabs.setCurrentIndex(0)
         if self.reference_asset is None:
             self._show_metrics_as_unavailable()
         self.capture_timer.start()
-        self._set_status("正在录音，实时预览已开启")
-        self.workflow_hint_label.setText("录音时只更新工作台里的实时波形预览。完整频谱图和客观指标需要在步骤 3 离线重新计算。")
+        self._set_status("正在录音，仅更新输入波形")
+        self.workflow_hint_label.setText("为节省性能，录音阶段不执行实时降噪。完整结果需点击“开始降噪”离线生成。")
         self.noisy_file_label.setText("当前待处理音频: 麦克风实时录制")
         self._set_input_source_badge("当前输入来源: 麦克风录音中", recording=True)
         self._sync_header_quick_actions()
@@ -1161,8 +1314,7 @@ class DenoiseStudio(QMainWindow):
         self.capture_timer.stop()
         was_recording = self.is_recording
         self.is_recording = False
-        self.record_button.setEnabled(not self.processing_busy)
-        self.stop_button.setEnabled(False)
+        self._refresh_record_toggle_button()
 
         if self.captured_chunks:
             recorded = np.concatenate(self.captured_chunks).astype(np.float32, copy=False)
@@ -1236,32 +1388,8 @@ class DenoiseStudio(QMainWindow):
         self.total_captured_frames += merged.size
         self.live_input_buffer = np.concatenate((self.live_input_buffer, merged))[-48000 * 3 :]
         self.live_input_card.set_signal(self.live_input_buffer, 48000)
-        self._schedule_preview()
-
-    def _schedule_preview(self) -> None:
-        if self.preview_busy or self.total_captured_frames - self.last_preview_frames < 12000:
-            return
-        if self.live_input_buffer.size < 12000:
-            return
-        algorithm = str(self.preview_combo.currentData())
-        preview_window = self.live_input_buffer[-48000:]
-        task = PreviewTask(algorithm, preview_window, 48000, self.model_dir, self._current_mmse_parameters())
-        task.signals.finished.connect(self._handle_preview_ready)
-        task.signals.error.connect(self._handle_worker_error)
-        self.preview_busy = True
-        self.last_preview_frames = self.total_captured_frames
-        self.thread_pool.start(task)
-
-    def _handle_preview_ready(self, payload: tuple[str, np.ndarray, int]) -> None:
-        _algorithm, samples, sample_rate = payload
-        self.preview_busy = False
-        self.live_output_buffer = samples[-sample_rate * 3 :]
-        self.live_output_card.set_signal(self.live_output_buffer, sample_rate)
-        if self.is_recording and self.total_captured_frames - self.last_preview_frames >= 12000:
-            self._schedule_preview()
 
     def _handle_worker_error(self, message: str) -> None:
-        self.preview_busy = False
         self._set_processing_state(False)
         QMessageBox.critical(self, "处理失败", message)
         self._set_status("处理失败，请检查音频格式、模型权重或环境依赖")
@@ -1303,6 +1431,12 @@ class DenoiseStudio(QMainWindow):
         self.noisy_wave_card.set_signal(result.noisy.samples, result.noisy.sample_rate)
         self.deepfilter_wave_card.set_signal(result.deepfilter.samples, result.deepfilter.sample_rate)
         self.mmse_wave_card.set_signal(result.mmse.samples, result.mmse.sample_rate)
+        self.comparison_wave_card.set_signals(
+            result.noisy.samples,
+            result.deepfilter.samples,
+            result.mmse.samples,
+            result.noisy.sample_rate,
+        )
         if self.reference_asset is not None:
             self.reference_wave_card.set_signal(self.reference_asset.samples, self.reference_asset.sample_rate)
         else:
@@ -1314,6 +1448,9 @@ class DenoiseStudio(QMainWindow):
         self.play_noisy_button.setEnabled(True)
         self.play_deepfilter_button.setEnabled(True)
         self.play_mmse_button.setEnabled(True)
+        self._set_post_denoise_controls_visible(True)
+        self._set_result_tabs_visible(True)
+        self.main_tabs.setCurrentIndex(1)
         self._sync_header_quick_actions()
 
     def _update_metrics(self, result: ComparisonResult) -> None:
