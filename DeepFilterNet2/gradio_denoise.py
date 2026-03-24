@@ -10,6 +10,10 @@ from app import denoise_audio
 def split_audio(audio_path, chunk_length_ms=600000):
     """将音频文件切割为指定长度的片段"""
     audio = AudioSegment.from_file(audio_path)
+    # 以固定时间窗进行切分：
+    # - chunk_length_ms 单位是毫秒，默认 600000 ms = 10 分钟
+    # - range 的步长与切片长度一致，因此是“无重叠分块”
+    # - 对超长音频可显著降低单次推理的峰值内存/显存占用
     chunks = [audio[i:i+chunk_length_ms] for i in range(0, len(audio), chunk_length_ms)]
     return chunks
 
@@ -17,6 +21,8 @@ def merge_audio(chunks, output_path):
     """合并多个音频片段"""
     combined = AudioSegment.empty()
     for chunk in chunks:
+        # 顺序累加拼接，保持与原时间轴一致（第 n 段接在第 n-1 段后）。
+        # 这里不做交叉淡入淡出，避免额外改变波形幅度与能量分布。
         combined += chunk
     combined.export(output_path, format="wav")
 
@@ -25,6 +31,7 @@ def process_chunk(chunk, index, temp_folder):
     chunk_path = os.path.join(temp_folder, f"chunk_{index}.wav")
     chunk.export(chunk_path, format="wav")
     output_path = os.path.join(temp_folder, f"processed_{index}.wav")
+    # 每个分块独立执行降噪；最终效果由后续“按序合并”重建完整时序。
     denoise_audio(chunk_path, output_path)
     return output_path
 
@@ -35,6 +42,8 @@ def process_audio(input_file: str) -> str:
 
     # 将音频切割成片段并处理每个片段
     chunks = split_audio(input_file)
+    # enumerate(chunks) 的索引 i 保证“处理后文件名”和“原始片段顺序”一一对应，
+    # 从而在合并阶段不会出现时序错乱。
     processed_chunks = [AudioSegment.from_wav(process_chunk(chunk, i, temp_folder)) for i, chunk in enumerate(chunks)]
     
     # 合并处理后的音频片段

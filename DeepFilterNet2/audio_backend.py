@@ -126,12 +126,17 @@ def _align_signals(reference: np.ndarray, degraded: np.ndarray) -> tuple[np.ndar
 
 def compute_snr(reference: np.ndarray, degraded: np.ndarray) -> float:
     ref, deg = _align_signals(reference, degraded)
+    # 噪声定义为“参考干净信号 - 当前退化信号”，对应经典加性噪声模型：y = s + n。
     noise = ref - deg
+    # 全局 SNR（dB）：10 * log10(信号能量 / 噪声能量)。
+    # 增加 EPSILON 避免在分母接近 0 时出现数值溢出。
     return float(10.0 * np.log10((np.sum(ref**2) + EPSILON) / (np.sum(noise**2) + EPSILON)))
 
 
 def compute_segmental_snr(reference: np.ndarray, degraded: np.ndarray, sample_rate: int) -> float:
     ref, deg = _align_signals(reference, degraded)
+    # 分段 SNR（SegSNR）按短时帧统计，更接近人耳对局部质量变化的感知。
+    # 这里使用 20ms 帧长，50% 重叠（hop = frame_length // 2）。
     frame_length = max(128, int(sample_rate * 0.02))
     hop = max(64, frame_length // 2)
     frame_scores: list[float] = []
@@ -141,7 +146,9 @@ def compute_segmental_snr(reference: np.ndarray, degraded: np.ndarray, sample_ra
         if ref_frame.size < frame_length:
             break
         error_frame = ref_frame - deg_frame
+        # 每一帧都单独计算 SNR，再做均值，防止某些高能量片段“掩盖”其他片段。
         frame_snr = 10.0 * np.log10((np.sum(ref_frame**2) + EPSILON) / (np.sum(error_frame**2) + EPSILON))
+        # 经典 SegSNR 常做截断，避免极端值主导均值（-10 dB 到 35 dB）。
         frame_scores.append(float(np.clip(frame_snr, -10.0, 35.0)))
     if not frame_scores:
         return compute_snr(ref, deg)
@@ -184,9 +191,11 @@ def compute_spectrogram(samples: np.ndarray, sample_rate: int) -> SpectrogramDat
             times=np.zeros(1, dtype=np.float32),
             magnitude_db=np.zeros((1, 1), dtype=np.float32),
         )
+    # STFT 窗长按采样率自适应到约 20ms，并取 2 的幂，平衡频率分辨率与计算效率。
     window = min(max(256, 2 ** math.ceil(math.log2(max(int(sample_rate * 0.02), 32)))), audio.size)
     if window < 16:
         window = min(16, audio.size)
+    # 75% 重叠：时间连续性更好，适合语音等非平稳信号。
     overlap = min(window - 1, int(window * 0.75))
     freqs, times, spectrum = stft(
         audio,
@@ -197,6 +206,8 @@ def compute_spectrogram(samples: np.ndarray, sample_rate: int) -> SpectrogramDat
         boundary="zeros",
         padded=True,
     )
+    # 幅度谱转 dB：20*log10(|X|)。
+    # 下限 1e-4 是为了避免 log(0) 并抑制极小值带来的数值不稳定。
     magnitude_db = 20.0 * np.log10(np.maximum(np.abs(spectrum), 1e-4))
     return SpectrogramData(freqs=freqs, times=times, magnitude_db=magnitude_db.astype(np.float32))
 
@@ -213,9 +224,12 @@ def diagnose_noise(samples: np.ndarray, sample_rate: int) -> NoiseDiagnosis:
             band_energies={"low": 0.0, "mid": 0.0, "high": 0.0},
         )
 
+    # 先乘 Hann 窗减轻频谱泄漏，再做实数 FFT（rFFT）得到单边频谱。
     spectrum = np.fft.rfft(audio * np.hanning(audio.size))
+    # 功率谱 = 幅度平方，表示各频率分量的能量贡献。
     power = np.abs(spectrum) ** 2
     freqs = np.fft.rfftfreq(audio.size, d=1.0 / sample_rate)
+    # 总功率用于做归一化，得到各频段“能量占比”。
     total_power = float(np.sum(power) + EPSILON)
 
     low_mask = freqs < 300.0
@@ -234,9 +248,15 @@ def diagnose_noise(samples: np.ndarray, sample_rate: int) -> NoiseDiagnosis:
         "high": "高频段 3000 Hz 以上",
     }
 
+    # 主导频率：功率谱峰值所在的频点。
     dominant_frequency = float(freqs[int(np.argmax(power))]) if power.size else 0.0
+    # 频谱质心：Σ(f*P)/ΣP，可理解为“能量重心频率”。
     centroid = float(np.sum(freqs * power) / total_power)
+    # 频谱平坦度：几何均值/算术均值。
+    # 值越大越接近“白噪声”，越小越偏“窄带/谐波”结构。
     flatness = float(np.exp(np.mean(np.log(power + EPSILON))) / (np.mean(power) + EPSILON))
+    # 峰均比（Crest Factor）：峰值 / RMS。
+    # 较高时通常意味着突发脉冲或瞬态成分明显。
     crest_factor = float(np.max(np.abs(audio)) / (np.sqrt(np.mean(audio**2) + EPSILON) + EPSILON))
 
     if crest_factor > 8.0:
@@ -329,13 +349,24 @@ def mmse_decision_directed_denoise(
     frame_ms = float(np.clip(params.frame_ms, 16.0, 64.0))
     overlap = float(np.clip(params.overlap, 0.5, 0.9))
 
+    # 以下是一组“用户参数 -> 算法内部参数”的映射：
+    # - suppression_strength 越高，降噪更强（但语音失真风险上升）
+    # - temporal_smoothing 越高，时域变化越平滑（但瞬态响应变慢）
+    # - speech_protection 越高，语音保真优先（噪声残留可能增加）
     decision_alpha = float(np.clip(0.91 + 0.06 * temporal_smoothing, 0.89, 0.99))
+    # 增益下限，避免把语音完全“压没”；数值越大，保留越多底噪与弱语音。
     gain_floor = float(np.clip(0.06 + 0.22 * speech_protection - 0.10 * suppression_strength, 0.05, 0.32))
+    # 当前帧增益与上一帧增益的混合系数，用于抑制“音乐噪声”抖动。
     gain_blend = float(np.clip(0.78 + 0.12 * temporal_smoothing, 0.76, 0.95))
+    # 语音存在概率的 SNR 阈值，阈值越低越容易判定为“有语音”。
     speech_threshold = float(np.clip(2.5 - 0.9 * suppression_strength + 0.4 * speech_protection, 1.0, 3.2))
+    # 用分位数初始化噪声 PSD，分位数越低越保守（更偏向纯噪声底）。
     noise_percentile = float(np.clip(8.0 + 15.0 * suppression_strength - 7.0 * speech_protection, 5.0, 28.0))
+    # 过减系数（over-subtraction）：提高等效噪声估计，换取更强抑制。
     over_subtraction = float(np.clip(1.0 + 1.8 * suppression_strength - 0.4 * speech_protection, 1.0, 2.8))
+    # 后滤波强度：在低语音存在概率处进一步衰减残余噪声。
     post_filter_strength = float(np.clip(0.08 + 0.32 * suppression_strength - 0.10 * speech_protection, 0.05, 0.35))
+    # 语音存在时噪声更新非常慢，避免把语音误吸收到噪声模型中。
     speech_noise_smoothing = float(np.clip(0.994 + 0.004 * speech_protection, 0.993, 0.9995))
     non_speech_noise_smoothing = float(
         np.clip(0.68 + 0.12 * temporal_smoothing + 0.08 * speech_protection - 0.06 * suppression_strength, 0.56, 0.93)
@@ -343,6 +374,7 @@ def mmse_decision_directed_denoise(
     dry_mix = float(np.clip(0.01 + 0.06 * speech_protection - 0.03 * suppression_strength, 0.0, 0.08))
     rms_limit = float(np.clip(1.30 + 0.25 * speech_protection, 1.1, 1.65))
 
+    # 帧长（STFT 窗长）按毫秒换算后再取 2 的幂，便于 FFT 高效计算。
     frame_length = max(256, 2 ** math.ceil(math.log2(max(int(sample_rate * frame_ms / 1000.0), 32))))
     frame_length = min(frame_length, max(audio.size, 256))
     if frame_length <= 16:
@@ -350,6 +382,7 @@ def mmse_decision_directed_denoise(
     hop = max(64, int(frame_length * (1.0 - overlap)))
     hop = min(hop, frame_length - 1)
 
+    # STFT: x(n) -> X(k, m)，进入频域逐 bin 做噪声抑制。
     _, _, spectrum = stft(
         audio,
         fs=sample_rate,
@@ -359,45 +392,64 @@ def mmse_decision_directed_denoise(
         boundary="zeros",
         padded=True,
     )
+    # 观测功率谱 |Y(k,m)|^2。
     power = np.abs(spectrum) ** 2 + EPSILON
     if power.shape[1] == 0:
         return audio
 
+    # 前若干帧通常更接近“噪声底”，用于初始化噪声功率谱密度（PSD）。
     initial_frames = max(6, min(power.shape[1] // 8, 20))
     initial_noise_psd = np.mean(power[:, :initial_frames], axis=1) if initial_frames > 0 else np.mean(power, axis=1)
+    # 与分位数估计取最小值，减少语音早期出现时的噪声高估。
     noise_psd = np.minimum(initial_noise_psd, np.percentile(power, noise_percentile, axis=1))
     enhanced_spectrum = np.zeros_like(spectrum)
+    # 前一帧“净语音功率”作为 Decision-Directed 先验的记忆项。
     previous_clean_power = np.maximum(power[:, 0] - noise_psd, EPSILON)
     previous_gain = np.ones_like(noise_psd)
+    # 频率方向 3 点平滑核，抑制孤立频点振铃与颗粒感。
     frequency_smoothing_kernel = np.array([0.15, 0.7, 0.15], dtype=np.float32)
 
     for frame_index in range(power.shape[1]):
         current_power = power[:, frame_index]
+        # 过减后噪声 PSD：等价提高噪声假设，强化抑制。
         adjusted_noise_psd = np.maximum(over_subtraction * noise_psd, EPSILON)
+        # 后验 SNR: γ(k,m) = |Y|^2 / λ_n。
         post_snr = current_power / adjusted_noise_psd
+        # Decision-Directed 先验 SNR:
+        # ξ(k,m) = α * (上一帧净语音功率/噪声PSD) + (1-α)*max(γ-1,0)
         prior_snr = (
             decision_alpha * previous_clean_power / adjusted_noise_psd
             + (1.0 - decision_alpha) * np.maximum(post_snr - 1.0, 0.0)
         )
         prior_snr = np.clip(prior_snr, 1e-4, 1e2)
 
-        # Use the decision-directed prior with a stronger Wiener-style gain and
-        # post-filtering in low speech-presence regions so the effect is audible.
+        # 维纳型增益：G = ξ / (1 + ξ)。
+        # ξ 越大（更像语音），增益越接近 1；ξ 越小（更像噪声），增益越接近 0。
         gain = prior_snr / (1.0 + prior_snr)
+        # 对频率增益做邻域平滑，降低“音乐噪声”的频点抖动。
         gain = np.pad(gain, (1, 1), mode="edge")
         gain = np.convolve(gain, frequency_smoothing_kernel, mode="valid")
+        # 时间方向再与上一帧增益融合，进一步稳定听感。
         gain = gain_blend * previous_gain + (1.0 - gain_blend) * gain
 
+        # 语音存在概率（sigmoid 映射）：
+        # post_snr 高于阈值时趋近 1，低于阈值时趋近 0。
         speech_presence = 1.0 / (1.0 + np.exp(-1.4 * (post_snr - speech_threshold)))
+        # 在“语音不太可能存在”的频点增强抑制。
         attenuation = 1.0 - post_filter_strength * (1.0 - speech_presence)
         gain = np.clip(gain * attenuation, gain_floor, 1.0)
         enhanced_spectrum[:, frame_index] = gain * spectrum[:, frame_index]
 
+        # 自适应噪声跟踪：
+        # - 有语音时：平滑系数接近 1，更新慢，保护语音
+        # - 无语音时：平滑系数较小，更新快，追踪非平稳噪声
         noise_smoothing = speech_noise_smoothing * speech_presence + non_speech_noise_smoothing * (1.0 - speech_presence)
         noise_psd = noise_smoothing * noise_psd + (1.0 - noise_smoothing) * current_power
+        # 估计当前净语音功率，作为下一帧先验 SNR 的历史项。
         previous_clean_power = np.maximum(np.square(gain) * current_power - 0.15 * adjusted_noise_psd, EPSILON)
         previous_gain = gain
 
+    # iSTFT 回到时域信号。
     _, restored = istft(
         enhanced_spectrum,
         fs=sample_rate,
@@ -408,10 +460,12 @@ def mmse_decision_directed_denoise(
         boundary=True,
     )
     restored = restored[: audio.size]
+    # RMS 能量补偿：降噪后常出现整体音量下降，限制补偿倍数避免过放大。
     input_rms = float(np.sqrt(np.mean(audio**2) + EPSILON))
     output_rms = float(np.sqrt(np.mean(restored**2) + EPSILON))
     rms_compensation = np.clip(input_rms / output_rms, 1.0, rms_limit)
     restored = rms_compensation * restored
+    # 干湿混合（dry/wet）：少量回灌原始信号，减少过处理带来的失真感。
     restored = (1.0 - dry_mix) * restored + dry_mix * audio
     return normalize_audio(restored)
 
