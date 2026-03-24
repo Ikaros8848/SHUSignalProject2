@@ -546,6 +546,8 @@ class DenoiseStudio(QMainWindow):
         self.result_hint_label.setVisible(False)
 
         self.load_noisy_button = QPushButton("导入待处理音频")
+        self.add_gaussian_noise_button = QPushButton("添加高斯噪声")
+        self.add_gaussian_noise_button.setObjectName("SecondaryButton")
         self.load_reference_button = QPushButton("导入参考语音")
         self.clear_reference_button = QPushButton("清空参考语音")
         self.clear_reference_button.setObjectName("SecondaryButton")
@@ -600,6 +602,7 @@ class DenoiseStudio(QMainWindow):
 
         for button in [
             self.load_noisy_button,
+            self.add_gaussian_noise_button,
             self.load_reference_button,
             self.clear_reference_button,
             self.record_button,
@@ -678,14 +681,16 @@ class DenoiseStudio(QMainWindow):
         source_buttons.setHorizontalSpacing(12)
         source_buttons.setVerticalSpacing(10)
         source_buttons.addWidget(self.load_noisy_button, 0, 0)
-        source_buttons.addWidget(self.load_reference_button, 0, 1)
-        source_buttons.addWidget(self.clear_reference_button, 0, 2)
+        source_buttons.addWidget(self.add_gaussian_noise_button, 0, 1)
+        source_buttons.addWidget(self.load_reference_button, 0, 2)
+        source_buttons.addWidget(self.clear_reference_button, 0, 3)
         source_buttons.addWidget(self.record_button, 1, 0)
         source_buttons.addWidget(self.stop_button, 1, 1)
-        source_buttons.addWidget(self.process_button, 1, 2)
+        source_buttons.addWidget(self.process_button, 1, 2, 1, 2)
         source_buttons.setColumnStretch(0, 1)
         source_buttons.setColumnStretch(1, 1)
         source_buttons.setColumnStretch(2, 1)
+        source_buttons.setColumnStretch(3, 1)
         source_layout.addWidget(source_caption)
         source_layout.addLayout(source_buttons)
 
@@ -739,6 +744,7 @@ class DenoiseStudio(QMainWindow):
         self.main_tabs.addTab(self._create_evaluation_tab(), "评估与诊断")
 
         self.load_noisy_button.clicked.connect(self.load_noisy_audio)
+        self.add_gaussian_noise_button.clicked.connect(self.add_gaussian_noise)
         self.load_reference_button.clicked.connect(self.load_reference_audio)
         self.clear_reference_button.clicked.connect(self.clear_reference_audio)
         self.record_button.clicked.connect(self.start_recording)
@@ -1025,6 +1031,52 @@ class DenoiseStudio(QMainWindow):
         if self.reference_asset is None:
             self._show_metrics_as_unavailable()
         self.play_noisy_button.setEnabled(True)
+        self._sync_header_quick_actions()
+
+    def add_gaussian_noise(self) -> None:
+        if self.processing_busy:
+            return
+        asset = self._get_current_noisy_asset()
+        if asset is None:
+            QMessageBox.information(self, "缺少输入", "请先导入待处理音频，或录制一段语音。")
+            return
+        if self.is_recording:
+            self.stop_recording(silent=True)
+            asset = self._get_current_noisy_asset()
+            if asset is None:
+                QMessageBox.information(self, "缺少输入", "录音数据为空，无法添加噪声。")
+                return
+
+        samples = asset.samples.astype(np.float32, copy=False)
+        if samples.size == 0:
+            QMessageBox.information(self, "无有效音频", "当前音频为空，无法添加噪声。")
+            return
+
+        signal_rms = float(np.sqrt(np.mean(samples**2)))
+        noise_std = max(signal_rms * 0.15, 0.005)
+        gaussian_noise = np.random.normal(0.0, noise_std, samples.shape).astype(np.float32)
+        noisy_samples = np.clip(samples + gaussian_noise, -1.0, 1.0).astype(np.float32)
+
+        self.noisy_asset = AudioAsset(samples=noisy_samples, sample_rate=asset.sample_rate, name=f"{asset.name} + 高斯噪声")
+        self.live_input_buffer = noisy_samples[-asset.sample_rate * 3 :]
+        self.live_output_buffer = np.zeros(0, dtype=np.float32)
+        self.result = None
+
+        self.noisy_file_label.setText(f"当前待处理音频: {self.noisy_asset.name}")
+        self._set_input_source_badge("当前输入来源: 人工注入高斯噪声")
+        self._set_status("已添加高斯噪声，可开始降噪对比")
+        self.workflow_hint_label.setText("已向当前音频注入高斯白噪声。点击“开始降噪”可查看新结果。")
+        self.result_hint_label.setText("输入已改变，旧结果已失效。请重新点击“开始降噪”刷新双算法对比。")
+
+        self.live_input_card.set_signal(self.live_input_buffer, asset.sample_rate)
+        self.live_output_card.set_signal(np.zeros(0, dtype=np.float32), asset.sample_rate)
+        self.noisy_wave_card.set_signal(noisy_samples, asset.sample_rate)
+        if self.reference_asset is None:
+            self._show_metrics_as_unavailable()
+
+        self.play_noisy_button.setEnabled(True)
+        self.play_deepfilter_button.setEnabled(False)
+        self.play_mmse_button.setEnabled(False)
         self._sync_header_quick_actions()
 
     def load_reference_audio(self) -> None:

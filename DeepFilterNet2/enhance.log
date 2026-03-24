@@ -1345,3 +1345,19 @@
 2026-03-11 11:17:42 | INFO     | DF | Found checkpoint D:\Miscs\OTHER\coding\python\DeepFilterNet2\checkpoints\model_96.ckpt.best with epoch 96
 2026-03-11 11:17:42 | INFO     | DF | Running on device cpu
 2026-03-11 11:17:42 | INFO     | DF | Model loaded
+2026-03-22 22:18:42 | INFO     | DF | Running on torch 2.0.1+cpu
+2026-03-22 22:18:42 | INFO     | DF | Running on host Ikaros
+2026-03-22 22:18:42 | INFO     | DF | Git commit: 79cdbeb, branch: master
+2026-03-22 22:18:42 | INFO     | DF | Loading model settings of DeepFilterNet2
+2026-03-22 22:18:42 | INFO     | DF | Initializing model `deepfilternet2`
+2026-03-22 22:18:42 | INFO     | DF | Found checkpoint D:\Miscs\OTHER\coding\signalPrj\DeepFilterNet2\checkpoints\model_96.ckpt.best with epoch 96
+2026-03-22 22:18:42 | INFO     | DF | Running on device cpu
+2026-03-22 22:18:42 | INFO     | DF | Model loaded
+2026-03-24 10:27:18 | INFO     | DF | Running on torch 2.0.1+cpu
+2026-03-24 10:27:18 | INFO     | DF | Running on host Ikaros
+2026-03-24 10:27:18 | INFO     | DF | Git commit: 79cdbeb, branch: master
+2026-03-24 10:27:18 | INFO     | DF | Loading model settings of DeepFilterNet2
+2026-03-24 10:27:18 | INFO     | DF | Initializing model `deepfilternet2`
+2026-03-24 10:27:18 | INFO     | DF | Found checkpoint D:\Miscs\OTHER\coding\signalPrj\DeepFilterNet2\checkpoints\model_96.ckpt.best with epoch 96
+2026-03-24 10:27:18 | INFO     | DF | Running on device cpu
+2026-03-24 10:27:18 | INFO     | DF | Model loaded
