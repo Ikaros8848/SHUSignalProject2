@@ -17,7 +17,7 @@
 
 ```bash
 $ git clone https://github.com/你的用户名/DeepFilterNet2-GUI.git
-$ cd DeepFilterNet2-GUI
+$ cd DeepFilterNet2
 ```
 
 ### 2. 创建虚拟环境（推荐 Python 3.10）
