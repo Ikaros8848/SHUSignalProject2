@@ -44,6 +44,9 @@ STYLE_SHEET = """
 QMainWindow {
     background: #f5f5f7;
 }
+QDialog {
+    background: #f5f5f7;
+}
 QWidget {
     color: #1d1d1f;
     font-family: 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI';

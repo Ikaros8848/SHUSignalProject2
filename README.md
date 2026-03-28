@@ -60,7 +60,7 @@ Successfully installed torch torchaudio matplotlib numpy
 ### 4. 运行 GUI 程序
 
 ```bash
-(venv) $ python run_gui.py
+(venv) $ python desktop_app.py
 ```
 
 如果一切正常，会弹出图形界面，你可以：
@@ -77,7 +77,7 @@ Successfully installed torch torchaudio matplotlib numpy
 你也可以直接在终端跑：
 
 ```bash
-(venv) $ python denoise_audio.py --input example.wav --output example_denoised.wav
+(venv) $ python gradio_audio.py --input example.wav --output example_denoised.wav
 ```
 
 输出示例：
