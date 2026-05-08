@@ -67,8 +67,6 @@ QPushButton#PlayButton { background: #E8F2FF; color: #0066CC; border-radius: 12p
 QPushButton#PlayButton:hover { background: #D1E4FF; }
 QPushButton#PauseButton { background: #FFF4E5; color: #FF8800; border-radius: 12px; border: none; }
 QPushButton#PauseButton:hover { background: #FFE5CC; }
-QPushButton#StopButton { background: #FFE9E7; color: #E30000; border-radius: 12px; border: none; }
-QPushButton#StopButton:hover { background: #FFD2CF; }
 QComboBox, QTableWidget { background: #ffffff; border: 1px solid #e5e5ea; border-radius: 10px; padding: 6px; }
 QDoubleSpinBox { background: #f5f5f7; border: none; border-radius: 8px; padding: 4px 8px; }
 QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0px; border: none; }
@@ -158,7 +156,15 @@ class AudioPlayer:
             self.stream.stop()
             self.stream.close()
             self.stream = None
+        self.samples = None
+        self.sample_rate = None
         self.pos = 0
+        self.is_paused = False
+
+    def get_current_time(self) -> float:
+        if self.sample_rate is None or self.sample_rate == 0:
+            return 0.0
+        return self.pos / self.sample_rate
 
 class PlotCard(QFrame):
     def __init__(self, title: str) -> None:
@@ -187,10 +193,23 @@ class WaveformCard(PlotCard):
         self.plot.getAxis("left").setTextPen(pg.mkPen("#8e8e93"))
         self.plot.getAxis("bottom").setTextPen(pg.mkPen("#8e8e93"))
         self.plot.setLabel("left", "Amp")
-        self.plot.setLabel("bottom", "Time")
+        self.plot.setLabel("bottom", "Time (s)")
         self.curve = self.plot.plot(pen=pg.mkPen(color, width=2.4))
+        
+        self.play_line = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen("#e30000", width=2, style=Qt.PenStyle.DashLine))
+        self.play_line.setPos(0.0)
+        self.plot.addItem(self.play_line)
+        self.play_line.hide()
+        
         self.card_layout.addWidget(self.plot)
         self._show_placeholder()
+
+    def update_play_cursor(self, current_time: float) -> None:
+        self.play_line.setPos(current_time)
+        self.play_line.show()
+
+    def hide_play_cursor(self) -> None:
+        self.play_line.hide()
 
     def _show_placeholder(self) -> None:
         self.curve.setData(np.array([0.0, 1.0], dtype=np.float32), np.zeros(2, dtype=np.float32))
@@ -234,12 +253,25 @@ class ComparisonWaveformCard(PlotCard):
         self.plot.getAxis("left").setTextPen(pg.mkPen("#8e8e93"))
         self.plot.getAxis("bottom").setTextPen(pg.mkPen("#8e8e93"))
         self.plot.setLabel("left", "Amp")
-        self.plot.setLabel("bottom", "Time")
+        self.plot.setLabel("bottom", "Time (s)")
         self.noisy_curve = self.plot.plot(pen=pg.mkPen("#0a84ff", width=1.8), name="原始")
         self.deepfilter_curve = self.plot.plot(pen=pg.mkPen("#30d158", width=1.8), name="DeepFilter")
         self.mmse_curve = self.plot.plot(pen=pg.mkPen("#ff9f0a", width=1.8), name="MMSE")
+
+        self.play_line = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen("#e30000", width=2, style=Qt.PenStyle.DashLine))
+        self.play_line.setPos(0.0)
+        self.plot.addItem(self.play_line)
+        self.play_line.hide()
+
         self.card_layout.addWidget(self.plot)
         self._show_placeholder()
+
+    def update_play_cursor(self, current_time: float) -> None:
+        self.play_line.setPos(current_time)
+        self.play_line.show()
+
+    def hide_play_cursor(self) -> None:
+        self.play_line.hide()
 
     def _show_placeholder(self) -> None:
         x = np.array([0.0, 1.0], dtype=np.float32)
@@ -301,11 +333,24 @@ class SpectrogramCard(PlotCard):
         self.plot.getAxis("left").setTextPen(pg.mkPen("#8e8e93"))
         self.plot.getAxis("bottom").setTextPen(pg.mkPen("#8e8e93"))
         self.plot.setLabel("left", "Hz")
-        self.plot.setLabel("bottom", "Time")
+        self.plot.setLabel("bottom", "Time (s)")
         self.image = pg.ImageItem()
         self.plot.addItem(self.image)
         self.image.setColorMap(pg.colormap.get("CET-L4") or "CET-L4")
+        
+        self.play_line = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen("#e30000", width=2, style=Qt.PenStyle.DashLine))
+        self.play_line.setPos(0.0)
+        self.plot.addItem(self.play_line)
+        self.play_line.hide()
+
         self.card_layout.addWidget(self.plot)
+
+    def update_play_cursor(self, current_time: float) -> None:
+        self.play_line.setPos(current_time)
+        self.play_line.show()
+
+    def hide_play_cursor(self) -> None:
+        self.play_line.hide()
 
     def set_spectrogram(
         self,
@@ -489,6 +534,7 @@ class DenoiseStudio(QMainWindow):
         self.processing_busy = False
         self.total_captured_frames = 0
         self.player = AudioPlayer()
+        self.active_play_variant: str | None = None
 
         self.setWindowTitle("信号与系统2课程项目 by cyx")
         self.resize(1360, 860)
@@ -525,6 +571,14 @@ class DenoiseStudio(QMainWindow):
         self.load_noisy_button = QPushButton("导入待处理音频")
         self.add_gaussian_noise_button = QPushButton("添加高斯噪声")
         self.add_gaussian_noise_button.setObjectName("SecondaryButton")
+        self.noise_level_spin = QDoubleSpinBox()
+        self.noise_level_spin.setRange(0.0, 50.0)
+        self.noise_level_spin.setSingleStep(1.0)
+        self.noise_level_spin.setDecimals(1)
+        self.noise_level_spin.setValue(15.0)
+        self.noise_level_spin.setSuffix("%")
+        self.noise_level_spin.setFixedWidth(78)
+        self.noise_level_spin.setToolTip("噪声强度（相对输入 RMS 百分比）")
         self.load_reference_button = QPushButton("导入参考语音")
         self.clear_reference_button = QPushButton("清空参考语音")
         self.clear_reference_button.setObjectName("SecondaryButton")
@@ -561,26 +615,19 @@ class DenoiseStudio(QMainWindow):
         self.play_noisy_button.setObjectName("PlayButton")
         self.pause_noisy_button = QPushButton("⏸ 暂停")
         self.pause_noisy_button.setObjectName("PauseButton")
-        self.stop_noisy_button = QPushButton("⏹ 停止")
-        self.stop_noisy_button.setObjectName("StopButton")
         
         self.play_deepfilter_button = QPushButton("▶ 播放 DF")
         self.play_deepfilter_button.setObjectName("PlayButton")
         self.pause_deepfilter_button = QPushButton("⏸")
         self.pause_deepfilter_button.setObjectName("PauseButton")
-        self.stop_deepfilter_button = QPushButton("⏹")
-        self.stop_deepfilter_button.setObjectName("StopButton")
         
         self.play_mmse_button = QPushButton("▶ 播放 MMSE")
         self.play_mmse_button.setObjectName("PlayButton")
         self.pause_mmse_button = QPushButton("⏸")
         self.pause_mmse_button.setObjectName("PauseButton")
-        self.stop_mmse_button = QPushButton("⏹")
-        self.stop_mmse_button.setObjectName("StopButton")
 
         for b in [self.play_noisy_button, self.play_deepfilter_button, self.play_mmse_button,
-                  self.pause_noisy_button, self.pause_deepfilter_button, self.pause_mmse_button,
-                  self.stop_noisy_button, self.stop_deepfilter_button, self.stop_mmse_button]:
+                self.pause_noisy_button, self.pause_deepfilter_button, self.pause_mmse_button]:
             b.setEnabled(False)
 
         self.progress_bar = QProgressBar()
@@ -737,13 +784,17 @@ class DenoiseStudio(QMainWindow):
         quick_buttons.setVerticalSpacing(6)
         quick_buttons.addWidget(self.load_noisy_button, 0, 0)
         quick_buttons.addWidget(self.record_toggle_button, 0, 1)
-        quick_buttons.addWidget(self.add_gaussian_noise_button, 0, 2)
+        noise_controls = QHBoxLayout()
+        noise_controls.setContentsMargins(0, 0, 0, 0)
+        noise_controls.setSpacing(6)
+        noise_controls.addWidget(self.add_gaussian_noise_button)
+        noise_controls.addWidget(self.noise_level_spin)
+        quick_buttons.addLayout(noise_controls, 0, 2)
         noisy_play_group = QHBoxLayout()
         noisy_play_group.setContentsMargins(0, 0, 0, 0)
         noisy_play_group.setSpacing(4)
         noisy_play_group.addWidget(self.play_noisy_button)
         noisy_play_group.addWidget(self.pause_noisy_button)
-        noisy_play_group.addWidget(self.stop_noisy_button)
         quick_buttons.addLayout(noisy_play_group, 0, 3)
         quick_buttons.addWidget(self.process_button, 0, 4)
         for index in range(5):
@@ -758,10 +809,8 @@ class DenoiseStudio(QMainWindow):
         post_denoise_layout.addWidget(post_denoise_label)
         post_denoise_layout.addWidget(self.play_deepfilter_button)
         post_denoise_layout.addWidget(self.pause_deepfilter_button)
-        post_denoise_layout.addWidget(self.stop_deepfilter_button)
         post_denoise_layout.addWidget(self.play_mmse_button)
         post_denoise_layout.addWidget(self.pause_mmse_button)
-        post_denoise_layout.addWidget(self.stop_mmse_button)
         post_denoise_layout.addWidget(self.progress_bar, 1)
         self.post_denoise_panel.setVisible(False)
 
@@ -800,19 +849,21 @@ class DenoiseStudio(QMainWindow):
         self.process_button.clicked.connect(self.run_comparison)
         self.play_noisy_button.clicked.connect(lambda: self.play_variant("noisy"))
         self.pause_noisy_button.clicked.connect(self.pause_playback)
-        self.stop_noisy_button.clicked.connect(self.stop_playback)
         
         self.play_deepfilter_button.clicked.connect(lambda: self.play_variant("deepfilter"))
         self.pause_deepfilter_button.clicked.connect(self.pause_playback)
-        self.stop_deepfilter_button.clicked.connect(self.stop_playback)
         
         self.play_mmse_button.clicked.connect(lambda: self.play_variant("mmse"))
         self.pause_mmse_button.clicked.connect(self.pause_playback)
-        self.stop_mmse_button.clicked.connect(self.stop_playback)
         self.advanced_button.clicked.connect(self._open_advanced_dialog)
         self.mmse_suppression_spin.valueChanged.connect(self._handle_mmse_parameters_changed)
         self.mmse_smoothing_spin.valueChanged.connect(self._handle_mmse_parameters_changed)
         self.mmse_protection_spin.valueChanged.connect(self._handle_mmse_parameters_changed)
+
+        self.play_timer = QTimer(self)
+        self.play_timer.setInterval(50)
+        self.play_timer.timeout.connect(self.update_playback_progress)
+        self.play_timer.start()
 
     def _open_advanced_dialog(self) -> None:
         self.advanced_dialog.show()
@@ -1125,6 +1176,7 @@ class DenoiseStudio(QMainWindow):
             QMessageBox.critical(self, "载入失败", str(exc))
             return
         self.stop_recording(silent=True)
+        self.stop_playback()
         self.noisy_asset = AudioAsset(samples=samples, sample_rate=sample_rate, name=Path(path).name)
         self.live_input_buffer = samples[-sample_rate * 3 :]
         self.result = None
@@ -1145,9 +1197,9 @@ class DenoiseStudio(QMainWindow):
         )
         if self.reference_asset is None:
             self._show_metrics_as_unavailable()
-        for b in [self.play_noisy_button, self.pause_noisy_button, self.stop_noisy_button]: b.setEnabled(True)
-        for b in [self.play_deepfilter_button, self.pause_deepfilter_button, self.stop_deepfilter_button]: b.setEnabled(False)
-        for b in [self.play_mmse_button, self.pause_mmse_button, self.stop_mmse_button]: b.setEnabled(False)
+        for b in [self.play_noisy_button, self.pause_noisy_button]: b.setEnabled(True)
+        for b in [self.play_deepfilter_button, self.pause_deepfilter_button]: b.setEnabled(False)
+        for b in [self.play_mmse_button, self.pause_mmse_button]: b.setEnabled(False)
         self._set_post_denoise_controls_visible(False)
         self._set_result_tabs_visible(False)
         self.main_tabs.setCurrentIndex(0)
@@ -1166,6 +1218,7 @@ class DenoiseStudio(QMainWindow):
             if asset is None:
                 QMessageBox.information(self, "缺少输入", "录音数据为空，无法添加噪声。")
                 return
+        self.stop_playback()
 
         samples = asset.samples.astype(np.float32, copy=False)
         if samples.size == 0:
@@ -1173,17 +1226,23 @@ class DenoiseStudio(QMainWindow):
             return
 
         signal_rms = float(np.sqrt(np.mean(samples**2)))
-        noise_std = max(signal_rms * 0.15, 0.005)
+        noise_ratio = float(self.noise_level_spin.value()) / 100.0
+        noise_std = signal_rms * noise_ratio
         gaussian_noise = np.random.normal(0.0, noise_std, samples.shape).astype(np.float32)
         noisy_samples = np.clip(samples + gaussian_noise, -1.0, 1.0).astype(np.float32)
 
-        self.noisy_asset = AudioAsset(samples=noisy_samples, sample_rate=asset.sample_rate, name=f"{asset.name} + 高斯噪声")
+        noise_label = f"{self.noise_level_spin.value():.1f}%"
+        self.noisy_asset = AudioAsset(
+            samples=noisy_samples,
+            sample_rate=asset.sample_rate,
+            name=f"{asset.name} + 高斯噪声({noise_label})",
+        )
         self.live_input_buffer = noisy_samples[-asset.sample_rate * 3 :]
         self.result = None
 
         self.noisy_file_label.setText(f"当前待处理音频: {self.noisy_asset.name}")
-        self._set_input_source_badge("当前输入来源: 人工注入高斯噪声")
-        self._set_status("已添加高斯噪声，可开始降噪对比")
+        self._set_input_source_badge(f"当前输入来源: 人工注入高斯噪声 · {noise_label}")
+        self._set_status(f"已添加高斯噪声（强度 {noise_label}），可开始降噪对比")
         self.workflow_hint_label.setText("已向当前音频注入高斯白噪声。点击“开始降噪”可查看新结果。")
         self.result_hint_label.setText("输入已改变，旧结果已失效。请重新点击“开始降噪”刷新双算法对比。")
 
@@ -1200,9 +1259,9 @@ class DenoiseStudio(QMainWindow):
         if self.reference_asset is None:
             self._show_metrics_as_unavailable()
 
-        for b in [self.play_noisy_button, self.pause_noisy_button, self.stop_noisy_button]: b.setEnabled(True)
-        for b in [self.play_deepfilter_button, self.pause_deepfilter_button, self.stop_deepfilter_button]: b.setEnabled(False)
-        for b in [self.play_mmse_button, self.pause_mmse_button, self.stop_mmse_button]: b.setEnabled(False)
+        for b in [self.play_noisy_button, self.pause_noisy_button]: b.setEnabled(True)
+        for b in [self.play_deepfilter_button, self.pause_deepfilter_button]: b.setEnabled(False)
+        for b in [self.play_mmse_button, self.pause_mmse_button]: b.setEnabled(False)
         self._set_post_denoise_controls_visible(False)
         self._set_result_tabs_visible(False)
         self.main_tabs.setCurrentIndex(0)
@@ -1243,6 +1302,7 @@ class DenoiseStudio(QMainWindow):
     def start_recording(self) -> None:
         if self.processing_busy or self.is_recording:
             return
+        self.stop_playback()
         self.audio_queue = queue.Queue()
         self.captured_chunks = []
         self.live_input_buffer = np.zeros(0, dtype=np.float32)
@@ -1265,9 +1325,9 @@ class DenoiseStudio(QMainWindow):
         self.noisy_asset = None
         self.result = None
         self._refresh_record_toggle_button()
-        for b in [self.play_noisy_button, self.pause_noisy_button, self.stop_noisy_button]: b.setEnabled(False)
-        for b in [self.play_deepfilter_button, self.pause_deepfilter_button, self.stop_deepfilter_button]: b.setEnabled(False)
-        for b in [self.play_mmse_button, self.pause_mmse_button, self.stop_mmse_button]: b.setEnabled(False)
+        for b in [self.play_noisy_button, self.pause_noisy_button]: b.setEnabled(False)
+        for b in [self.play_deepfilter_button, self.pause_deepfilter_button]: b.setEnabled(False)
+        for b in [self.play_mmse_button, self.pause_mmse_button]: b.setEnabled(False)
         self._set_post_denoise_controls_visible(False)
         self._set_result_tabs_visible(False)
         self.main_tabs.setCurrentIndex(0)
@@ -1293,13 +1353,16 @@ class DenoiseStudio(QMainWindow):
         self.is_recording = False
         self._refresh_record_toggle_button()
 
-        if self.captured_chunks:
+        if was_recording and self.captured_chunks:
             recorded = np.concatenate(self.captured_chunks).astype(np.float32, copy=False)
             self.noisy_asset = AudioAsset(samples=recorded, sample_rate=48000, name="麦克风录音")
             self.noisy_wave_card.set_signal(recorded, 48000)
             self.play_noisy_button.setEnabled(True)
             self.noisy_file_label.setText("当前待处理音频: 麦克风录音")
             self._set_input_source_badge("当前输入来源: 麦克风录音")
+        if was_recording:
+            self.captured_chunks = []
+            self.total_captured_frames = 0
         self._sync_header_quick_actions()
         if was_recording and not silent:
             self._set_status("录音结束，可以开始降噪")
@@ -1382,7 +1445,9 @@ class DenoiseStudio(QMainWindow):
         if asset is None:
             QMessageBox.information(self, "缺少输入", "请先导入待处理音频，或录制一段语音。")
             return
+        self.stop_playback()
         self.stop_recording(silent=True)
+        self.noisy_asset = AudioAsset(samples=asset.samples, sample_rate=asset.sample_rate, name=asset.name)
         self._set_processing_state(True)
         self._set_status("正在运行 DeepFilterNet2 与 MMSE 双算法，请稍候")
         reference_samples = None if self.reference_asset is None else self.reference_asset.samples
@@ -1422,9 +1487,9 @@ class DenoiseStudio(QMainWindow):
         self._update_spectrogram_views(result)
         self._update_metrics(result)
         self._update_diagnosis(result)
-        for b in [self.play_noisy_button, self.pause_noisy_button, self.stop_noisy_button]: b.setEnabled(True)
-        for b in [self.play_deepfilter_button, self.pause_deepfilter_button, self.stop_deepfilter_button]: b.setEnabled(True)
-        for b in [self.play_mmse_button, self.pause_mmse_button, self.stop_mmse_button]: b.setEnabled(True)
+        for b in [self.play_noisy_button, self.pause_noisy_button]: b.setEnabled(True)
+        for b in [self.play_deepfilter_button, self.pause_deepfilter_button]: b.setEnabled(True)
+        for b in [self.play_mmse_button, self.pause_mmse_button]: b.setEnabled(True)
         self._set_post_denoise_controls_visible(True)
         self._set_result_tabs_visible(True)
         self.main_tabs.setCurrentIndex(1)
@@ -1460,30 +1525,88 @@ class DenoiseStudio(QMainWindow):
 
     def play_variant(self, variant: str) -> None:
         try:
-            if self.player.is_paused and getattr(self, "last_played_variant", None) == variant:
-                self.player.resume()
-                return
-
             self.player.stop()
-            self.last_played_variant = variant
+            self._hide_all_play_cursors()
             
             if variant == "noisy":
+                if self.result is not None:
+                    self.active_play_variant = variant
+                    self.player.play(self.result.noisy.samples, self.result.noisy.sample_rate)
+                    return
                 asset = self._get_current_noisy_asset()
-                if asset is None: return
+                if asset is None:
+                    return
+                self.active_play_variant = variant
                 self.player.play(asset.samples, asset.sample_rate)
-            elif self.result is not None:
-                if variant == "deepfilter":
-                    self.player.play(self.result.deepfilter.samples, self.result.deepfilter.sample_rate)
-                elif variant == "mmse":
-                    self.player.play(self.result.mmse.samples, self.result.mmse.sample_rate)
+                return
+
+            if self.result is None:
+                return
+            if variant == "deepfilter":
+                self.active_play_variant = variant
+                self.player.play(self.result.deepfilter.samples, self.result.deepfilter.sample_rate)
+            elif variant == "mmse":
+                self.active_play_variant = variant
+                self.player.play(self.result.mmse.samples, self.result.mmse.sample_rate)
         except Exception as exc:
             QMessageBox.critical(self, "播放失败", str(exc))
 
     def pause_playback(self):
-        self.player.pause()
+        if self.player.is_paused:
+            self.player.resume()
+        else:
+            self.player.pause()
+
+    def _hide_all_play_cursors(self) -> None:
+        for attr in [
+            "live_input_card",
+            "noisy_wave_card",
+            "deepfilter_wave_card",
+            "mmse_wave_card",
+            "comparison_wave_card",
+            "reference_wave_card",
+            "noisy_spec_card",
+            "deepfilter_spec_card",
+            "mmse_spec_card",
+            "reference_spec_card",
+        ]:
+            card = getattr(self, attr, None)
+            if card is not None and hasattr(card, "hide_play_cursor"):
+                card.hide_play_cursor()
+
+    def _update_play_cursor_for_variant(self, variant: str, current_time: float) -> None:
+        if variant == "noisy":
+            if hasattr(self, "live_input_card"):
+                self.live_input_card.update_play_cursor(current_time)
+            if hasattr(self, "noisy_wave_card"):
+                self.noisy_wave_card.update_play_cursor(current_time)
+            if hasattr(self, "noisy_spec_card"):
+                self.noisy_spec_card.update_play_cursor(current_time)
+            return
+        if variant == "deepfilter":
+            if hasattr(self, "deepfilter_wave_card"):
+                self.deepfilter_wave_card.update_play_cursor(current_time)
+            if hasattr(self, "deepfilter_spec_card"):
+                self.deepfilter_spec_card.update_play_cursor(current_time)
+            return
+        if variant == "mmse":
+            if hasattr(self, "mmse_wave_card"):
+                self.mmse_wave_card.update_play_cursor(current_time)
+            if hasattr(self, "mmse_spec_card"):
+                self.mmse_spec_card.update_play_cursor(current_time)
+            return
 
     def stop_playback(self):
         self.player.stop()
+        self.active_play_variant = None
+        self._hide_all_play_cursors()
+
+    def update_playback_progress(self):
+        if not self.player.is_paused and self.player.stream is not None:
+            if self.active_play_variant is None:
+                return
+            t = self.player.get_current_time()
+            self._update_play_cursor_for_variant(self.active_play_variant, t)
 
     def closeEvent(self, event) -> None:
         self.stop_recording(silent=True)

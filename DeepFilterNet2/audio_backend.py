@@ -356,23 +356,23 @@ def mmse_decision_directed_denoise(
     # - speech_protection 越高，语音保真优先（噪声残留可能增加）
     decision_alpha = float(np.clip(0.91 + 0.06 * temporal_smoothing, 0.89, 0.99))
     # 增益下限，避免把语音完全“压没”；数值越大，保留越多底噪与弱语音。
-    gain_floor = float(np.clip(0.06 + 0.22 * speech_protection - 0.10 * suppression_strength, 0.05, 0.32))
+    gain_floor = float(np.clip(0.04 + 0.18 * speech_protection - 0.18 * suppression_strength, 0.015, 0.25))
     # 当前帧增益与上一帧增益的混合系数，用于抑制“音乐噪声”抖动。
     gain_blend = float(np.clip(0.78 + 0.12 * temporal_smoothing, 0.76, 0.95))
     # 语音存在概率的 SNR 阈值，阈值越低越容易判定为“有语音”。
-    speech_threshold = float(np.clip(2.5 - 0.9 * suppression_strength + 0.4 * speech_protection, 1.0, 3.2))
+    speech_threshold = float(np.clip(2.7 - 0.7 * suppression_strength + 0.35 * speech_protection, 1.1, 3.6))
     # 用分位数初始化噪声 PSD，分位数越低越保守（更偏向纯噪声底）。
     noise_percentile = float(np.clip(8.0 + 15.0 * suppression_strength - 7.0 * speech_protection, 5.0, 28.0))
-    # 过减系数（over-subtraction）：适当降低以防止误伤人声。
-    over_subtraction = float(np.clip(1.0 + 1.0 * suppression_strength - 0.6 * speech_protection, 1.0, 2.0))
+    # 过减系数（over-subtraction）：增强时更明显抑制噪声地板。
+    over_subtraction = float(np.clip(1.15 + 1.1 * suppression_strength - 0.45 * speech_protection, 1.05, 2.4))
     # 后滤波强度：在低语音存在概率处进一步衰减残余噪声。
-    post_filter_strength = float(np.clip(0.08 + 0.32 * suppression_strength - 0.10 * speech_protection, 0.05, 0.35))
+    post_filter_strength = float(np.clip(0.12 + 0.4 * suppression_strength - 0.10 * speech_protection, 0.08, 0.50))
     # 语音存在时噪声更新非常慢，避免把语音误吸收到噪声模型中。
     speech_noise_smoothing = float(np.clip(0.994 + 0.004 * speech_protection, 0.993, 0.9995))
     non_speech_noise_smoothing = float(
         np.clip(0.68 + 0.12 * temporal_smoothing + 0.08 * speech_protection - 0.06 * suppression_strength, 0.56, 0.93)
     )
-    dry_mix = float(np.clip(0.01 + 0.06 * speech_protection - 0.03 * suppression_strength, 0.0, 0.08))
+    dry_mix = float(np.clip(0.01 + 0.05 * speech_protection - 0.04 * suppression_strength, 0.0, 0.07))
     rms_limit = float(np.clip(1.30 + 0.25 * speech_protection, 1.1, 1.65))
 
     # 帧长（STFT 窗长）按毫秒换算后再取 2 的幂，便于 FFT 高效计算。
@@ -435,21 +435,26 @@ def mmse_decision_directed_denoise(
         # 2. 计算基于似然比的语音存在概率 (Speech Presence Probability, SPP)
         likelihood = np.exp(v_clipped) / (1.0 + prior_snr)
         # 动态调整先验缺失概率 (q值)，适当降低使得算法更倾向于保留声音
-        q_prob = np.clip(0.3 + 0.3 * suppression_strength - 0.2 * speech_protection, 0.05, 0.8)
+        q_prob = np.clip(0.35 + 0.30 * suppression_strength - 0.20 * speech_protection, 0.08, 0.85)
         theta = q_prob / (1.0 - q_prob)
         # 计算理论 SPP
         spp_smooth = likelihood / (likelihood + theta)
         
-        # 将原来的乘法改为取最大值或更缓和的逻辑，减少人声被双重压制的概率
+        # 使用加权融合让“是否有语音”的判断更保守，避免残余噪声被过度保留
         spp_sigmoid = 1.0 / (1.0 + np.exp(-1.2 * (post_snr - speech_threshold)))
-        speech_presence = np.maximum(spp_smooth, spp_sigmoid)
+        spp_blend = float(np.clip(0.55 + 0.35 * suppression_strength - 0.25 * speech_protection, 0.35, 0.85))
+        speech_presence = spp_blend * spp_smooth + (1.0 - spp_blend) * spp_sigmoid
 
         # 3. OMLSA (Optimally Modified LSA) 增益融合
         # 充分认定为有语音时使用 LSA 增益，否则柔和降落至底噪增益下限
         gain = (gain_lsa ** speech_presence) * (gain_floor ** (1.0 - speech_presence))
-        
-        # 避免极端情况下的数值问题
-        gain = np.clip(gain, gain_floor, 1.0)
+        # 后滤波：对“疑似无语音”的频点再压一层，增强可感知的降噪量
+        noise_mask = np.clip(1.0 - speech_presence, 0.0, 1.0)
+        gain *= 1.0 - post_filter_strength * (noise_mask ** 1.40)
+
+        # 自适应下限：语音存在概率越低，允许更低的底噪增益
+        adaptive_floor = np.clip(gain_floor * (0.25 + 0.75 * speech_presence), 0.01, gain_floor)
+        gain = np.clip(gain, adaptive_floor, 1.0)
 
         # 4. 对频率增益做邻域平滑，降低“音乐噪声”的频点抖动。
         gain = np.pad(gain, (1, 1), mode="edge")

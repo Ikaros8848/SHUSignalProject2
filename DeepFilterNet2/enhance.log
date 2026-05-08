@@ -1433,3 +1433,67 @@
 2026-05-08 16:38:55 | INFO     | DF | Found checkpoint D:\Miscs\OTHER\coding\signalPrj\DeepFilterNet2\checkpoints\model_96.ckpt.best with epoch 96
 2026-05-08 16:38:55 | INFO     | DF | Running on device cpu
 2026-05-08 16:38:55 | INFO     | DF | Model loaded
+2026-05-08 19:49:41 | INFO     | DF | Running on torch 2.0.1+cpu
+2026-05-08 19:49:41 | INFO     | DF | Running on host Ikaros
+2026-05-08 19:49:41 | INFO     | DF | Git commit: ebf9c94, branch: master
+2026-05-08 19:49:41 | INFO     | DF | Loading model settings of DeepFilterNet2
+2026-05-08 19:49:41 | INFO     | DF | Initializing model `deepfilternet2`
+2026-05-08 19:49:41 | INFO     | DF | Found checkpoint D:\Miscs\OTHER\coding\signalPrj\DeepFilterNet2\checkpoints\model_96.ckpt.best with epoch 96
+2026-05-08 19:49:41 | INFO     | DF | Running on device cpu
+2026-05-08 19:49:41 | INFO     | DF | Model loaded
+2026-05-08 19:52:09 | INFO     | DF | Running on torch 2.0.1+cpu
+2026-05-08 19:52:09 | INFO     | DF | Running on host Ikaros
+2026-05-08 19:52:09 | INFO     | DF | Git commit: ebf9c94, branch: master
+2026-05-08 19:52:09 | INFO     | DF | Loading model settings of DeepFilterNet2
+2026-05-08 19:52:09 | INFO     | DF | Initializing model `deepfilternet2`
+2026-05-08 19:52:10 | INFO     | DF | Found checkpoint D:\Miscs\OTHER\coding\signalPrj\DeepFilterNet2\checkpoints\model_96.ckpt.best with epoch 96
+2026-05-08 19:52:10 | INFO     | DF | Running on device cpu
+2026-05-08 19:52:10 | INFO     | DF | Model loaded
+2026-05-08 19:54:35 | INFO     | DF | Running on torch 2.0.1+cpu
+2026-05-08 19:54:35 | INFO     | DF | Running on host Ikaros
+2026-05-08 19:54:35 | INFO     | DF | Git commit: ebf9c94, branch: master
+2026-05-08 19:54:35 | INFO     | DF | Loading model settings of DeepFilterNet2
+2026-05-08 19:54:35 | INFO     | DF | Initializing model `deepfilternet2`
+2026-05-08 19:54:35 | INFO     | DF | Found checkpoint D:\Miscs\OTHER\coding\signalPrj\DeepFilterNet2\checkpoints\model_96.ckpt.best with epoch 96
+2026-05-08 19:54:35 | INFO     | DF | Running on device cpu
+2026-05-08 19:54:35 | INFO     | DF | Model loaded
+2026-05-08 20:02:49 | INFO     | DF | Running on torch 2.0.1+cpu
+2026-05-08 20:02:49 | INFO     | DF | Running on host Ikaros
+2026-05-08 20:02:49 | INFO     | DF | Git commit: ebf9c94, branch: master
+2026-05-08 20:02:49 | INFO     | DF | Loading model settings of DeepFilterNet2
+2026-05-08 20:02:49 | INFO     | DF | Initializing model `deepfilternet2`
+2026-05-08 20:02:49 | INFO     | DF | Found checkpoint D:\Miscs\OTHER\coding\signalPrj\DeepFilterNet2\checkpoints\model_96.ckpt.best with epoch 96
+2026-05-08 20:02:49 | INFO     | DF | Running on device cpu
+2026-05-08 20:02:49 | INFO     | DF | Model loaded
+2026-05-08 21:35:02 | INFO     | DF | Running on torch 2.0.1+cpu
+2026-05-08 21:35:02 | INFO     | DF | Running on host Ikaros
+2026-05-08 21:35:02 | INFO     | DF | Git commit: ebf9c94, branch: master
+2026-05-08 21:35:02 | INFO     | DF | Loading model settings of DeepFilterNet2
+2026-05-08 21:35:02 | INFO     | DF | Initializing model `deepfilternet2`
+2026-05-08 21:35:02 | INFO     | DF | Found checkpoint D:\Miscs\OTHER\coding\signalPrj\DeepFilterNet2\checkpoints\model_96.ckpt.best with epoch 96
+2026-05-08 21:35:02 | INFO     | DF | Running on device cpu
+2026-05-08 21:35:02 | INFO     | DF | Model loaded
+2026-05-08 21:38:19 | INFO     | DF | Running on torch 2.0.1+cpu
+2026-05-08 21:38:19 | INFO     | DF | Running on host Ikaros
+2026-05-08 21:38:19 | INFO     | DF | Git commit: ebf9c94, branch: master
+2026-05-08 21:38:19 | INFO     | DF | Loading model settings of DeepFilterNet2
+2026-05-08 21:38:19 | INFO     | DF | Initializing model `deepfilternet2`
+2026-05-08 21:38:19 | INFO     | DF | Found checkpoint D:\Miscs\OTHER\coding\signalPrj\DeepFilterNet2\checkpoints\model_96.ckpt.best with epoch 96
+2026-05-08 21:38:19 | INFO     | DF | Running on device cpu
+2026-05-08 21:38:19 | INFO     | DF | Model loaded
+2026-05-08 21:40:56 | INFO     | DF | Running on torch 2.0.1+cpu
+2026-05-08 21:40:56 | INFO     | DF | Running on host Ikaros
+2026-05-08 21:40:56 | INFO     | DF | Git commit: ebf9c94, branch: master
+2026-05-08 21:40:56 | INFO     | DF | Loading model settings of DeepFilterNet2
+2026-05-08 21:40:56 | INFO     | DF | Initializing model `deepfilternet2`
+2026-05-08 21:40:56 | INFO     | DF | Found checkpoint D:\Miscs\OTHER\coding\signalPrj\DeepFilterNet2\checkpoints\model_96.ckpt.best with epoch 96
+2026-05-08 21:40:56 | INFO     | DF | Running on device cpu
+2026-05-08 21:40:56 | INFO     | DF | Model loaded
+2026-05-08 21:46:10 | INFO     | DF | Running on torch 2.0.1+cpu
+2026-05-08 21:46:10 | INFO     | DF | Running on host Ikaros
+2026-05-08 21:46:10 | INFO     | DF | Git commit: ebf9c94, branch: master
+2026-05-08 21:46:10 | INFO     | DF | Loading model settings of DeepFilterNet2
+2026-05-08 21:46:10 | INFO     | DF | Initializing model `deepfilternet2`
+2026-05-08 21:46:10 | INFO     | DF | Found checkpoint D:\Miscs\OTHER\coding\signalPrj\DeepFilterNet2\checkpoints\model_96.ckpt.best with epoch 96
+2026-05-08 21:46:10 | INFO     | DF | Running on device cpu
+2026-05-08 21:46:10 | INFO     | DF | Model loaded
