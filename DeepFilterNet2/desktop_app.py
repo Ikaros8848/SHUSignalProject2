@@ -41,159 +41,46 @@ pg.setConfigOptions(antialias=True)
 
 
 STYLE_SHEET = """
-QMainWindow {
-    background: #f5f5f7;
-}
-QDialog {
-    background: #f5f5f7;
-}
-QWidget {
-    color: #1d1d1f;
-    font-family: 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI';
-    font-size: 13px;
-}
-QFrame#Card {
-    background: #ffffff;
-    border: 1px solid #e5e5ea;
-    border-radius: 20px;
-}
-QFrame#HeaderPanel {
-    background: #f9fafc;
-    border: 1px solid #e2e6ee;
-    border-radius: 18px;
-}
-QLabel#Title {
-    font-family: 'Segoe UI Semibold', 'Microsoft YaHei UI';
-    font-size: 28px;
-    color: #111111;
-}
-QLabel#Subtitle {
-    color: #6e6e73;
-    font-size: 13px;
-}
-QLabel#HeaderCaption {
-    color: #6e6e73;
-    font-size: 12px;
-}
-QLabel#SectionTitle {
-    font-family: 'Segoe UI Semibold', 'Microsoft YaHei UI';
-    font-size: 15px;
-    color: #1d1d1f;
-}
-QLabel#StepLabel {
-    color: #0071e3;
-    font-family: 'Segoe UI Semibold', 'Microsoft YaHei UI';
-    font-size: 12px;
-}
-QLabel#HintText {
-    color: #6e6e73;
-}
-QLabel#InfoChip {
-    padding: 10px 14px;
-    border-radius: 12px;
-    background: #f2f2f7;
-    color: #3a3a3c;
-}
-QLabel#InputBadge {
-    padding: 8px 12px;
-    border-radius: 999px;
-    background: #e8f2ff;
-    color: #005ecb;
-    font-family: 'Segoe UI Semibold', 'Microsoft YaHei UI';
-}
-QLabel#InputBadgeRecording {
-    padding: 8px 12px;
-    border-radius: 999px;
-    background: #ffe9e7;
-    color: #c93428;
-    font-family: 'Segoe UI Semibold', 'Microsoft YaHei UI';
-}
-QPushButton {
-    background: #0071e3;
-    border: 1px solid #0071e3;
-    border-radius: 12px;
-    color: #ffffff;
-    font-family: 'Microsoft YaHei UI';
-    font-size: 9px;
-    font-weight: 500;
-    min-height: 24px;
-    padding: 1px 8px;
-}
-QPushButton:hover {
-    background: #0077ed;
-    border: 1px solid #0077ed;
-}
-QPushButton:pressed {
-    background: #0068d1;
-}
-QPushButton:disabled {
-    background: #e5e5ea;
-    border: 1px solid #e5e5ea;
-    color: #8e8e93;
-}
-QPushButton#SecondaryButton {
-    background: #ffffff;
-    border: 1px solid #d2d2d7;
-    color: #1d1d1f;
-}
-QPushButton#SecondaryButton:hover {
-    background: #f5f5f7;
-    border: 1px solid #c7c7cc;
-}
-QComboBox, QTableWidget {
-    background: #ffffff;
-    border: 1px solid #d2d2d7;
-    border-radius: 10px;
-    padding: 6px;
-}
-QDoubleSpinBox {
-    background: #ffffff;
-    border: 1px solid #d2d2d7;
-    border-radius: 10px;
-    padding: 4px 20px 4px 8px;
-}
-QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {
-    width: 18px;
-    border-left: 1px solid #e5e5ea;
-}
-QComboBox QAbstractItemView {
-    background: #ffffff;
-    selection-background-color: #e8f2ff;
-}
-QTabWidget::pane {
-    border: none;
-}
-QTabBar::tab {
-    background: #ececf1;
-    border-top-left-radius: 12px;
-    border-top-right-radius: 12px;
-    padding: 8px 14px;
-    margin-right: 8px;
-    color: #6e6e73;
-}
-QTabBar::tab:selected {
-    background: #ffffff;
-    color: #1d1d1f;
-}
-QProgressBar {
-    border-radius: 10px;
-    background: #ececf1;
-    border: 1px solid #d2d2d7;
-    text-align: center;
-    color: #1d1d1f;
-}
-QProgressBar::chunk {
-    border-radius: 10px;
-    background: #0071e3;
-}
-QHeaderView::section {
-    background: #f5f5f7;
-    border: none;
-    padding: 8px;
-    color: #6e6e73;
-}
+QMainWindow { background: #fbfbfd; }
+QDialog { background: #fbfbfd; }
+QWidget { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', 'Segoe UI', 'Microsoft YaHei UI'; color: #1d1d1f; font-size: 13px; }
+QFrame#Card { background: #ffffff; border: 1px solid #f0f0f5; border-radius: 16px; }
+QFrame#HeaderPanel { background: #ffffff; border: 1px solid #f0f0f5; border-radius: 16px; }
+QLabel#Title { font-weight: 600; font-size: 28px; color: #1d1d1f; }
+QLabel#Subtitle { color: #86868b; font-size: 13px; }
+QLabel#HeaderCaption { color: #86868b; font-size: 12px; }
+QLabel#SectionTitle { font-weight: 600; font-size: 15px; color: #1d1d1f; }
+QLabel#StepLabel { color: #0066cc; font-weight: 600; font-size: 12px; }
+QLabel#HintText { color: #86868b; }
+QLabel#InfoChip { padding: 8px 12px; border-radius: 12px; background: #f5f5f7; color: #1d1d1f; }
+QLabel#InputBadge { padding: 8px 12px; border-radius: 12px; background: #e8f2ff; color: #0066cc; font-weight: 600; }
+QLabel#InputBadgeRecording { padding: 8px 12px; border-radius: 12px; background: #ffe9e7; color: #e30000; font-weight: 600; }
+QPushButton { background: #0066cc; border: none; border-radius: 14px; color: #ffffff; font-weight: 500; min-height: 28px; padding: 4px 14px; }
+QPushButton:hover { background: #0077ed; }
+QPushButton:pressed { background: #0055b3; }
+QPushButton:disabled { background: #e5e5ea; color: #a1a1a6; }
+QPushButton#SecondaryButton { background: #f5f5f7; color: #1d1d1f; }
+QPushButton#SecondaryButton:hover { background: #e8e8ed; }
+QPushButton#SecondaryButton:pressed { background: #d1d1d6; }
+QPushButton#SecondaryButton:disabled { background: #f5f5f7; color: #c7c7cc; }
+QPushButton#PlayButton { background: #E8F2FF; color: #0066CC; border-radius: 12px; border: none; }
+QPushButton#PlayButton:hover { background: #D1E4FF; }
+QPushButton#PauseButton { background: #FFF4E5; color: #FF8800; border-radius: 12px; border: none; }
+QPushButton#PauseButton:hover { background: #FFE5CC; }
+QPushButton#StopButton { background: #FFE9E7; color: #E30000; border-radius: 12px; border: none; }
+QPushButton#StopButton:hover { background: #FFD2CF; }
+QComboBox, QTableWidget { background: #ffffff; border: 1px solid #e5e5ea; border-radius: 10px; padding: 6px; }
+QDoubleSpinBox { background: #f5f5f7; border: none; border-radius: 8px; padding: 4px 8px; }
+QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0px; border: none; }
+QComboBox QAbstractItemView { background: #ffffff; selection-background-color: #e8f2ff; }
+QTabWidget::pane { border: none; border-top: 1px solid #e5e5ea; }
+QTabBar::tab { background: transparent; padding: 8px 16px; margin-right: 8px; color: #86868b; font-weight: 500; border-bottom: 2px solid transparent; }
+QTabBar::tab:selected { color: #1d1d1f; border-bottom: 2px solid #0066cc; }
+QTabBar::tab:hover:!selected { color: #1d1d1f; }
+QProgressBar { border-radius: 6px; background: #f5f5f7; border: none; text-align: center; color: transparent; }
+QProgressBar::chunk { border-radius: 6px; background: #0066cc; }
+QHeaderView::section { background: #fbfbfd; border: none; padding: 8px; color: #86868b; font-weight: 500; }
 """
-
 
 def format_metric(value: float | None) -> str:
     return "N/A" if value is None else f"{value:.3f}"
@@ -221,6 +108,57 @@ def shared_spectrogram_levels(*spectrograms: np.ndarray) -> tuple[float, float]:
         return (minimum - 1.0, maximum + 1.0)
     return (minimum, maximum)
 
+
+
+class AudioPlayer:
+    def __init__(self):
+        self.stream = None
+        self.samples = None
+        self.sample_rate = None
+        self.pos = 0
+        self.is_paused = False
+
+    def play(self, samples, sr):
+        if self.stream is not None:
+            self.stream.stop()
+            self.stream.close()
+            
+        self.samples = samples
+        self.sample_rate = sr
+        self.pos = 0
+        self.is_paused = False
+
+        def callback(outdata, frames, time, status):
+            if self.is_paused or self.samples is None:
+                outdata.fill(0)
+                return
+            
+            chunk = min(len(self.samples) - self.pos, frames)
+            if chunk <= 0:
+                outdata.fill(0)
+                raise sd.CallbackStop()
+
+            outdata[:chunk, 0] = self.samples[self.pos:self.pos+chunk]
+            if chunk < frames:
+                outdata[chunk:, 0] = 0
+            self.pos += chunk
+
+        self.stream = sd.OutputStream(samplerate=self.sample_rate, channels=1, callback=callback)
+        self.stream.start()
+
+    def pause(self):
+        self.is_paused = True
+
+    def resume(self):
+        if self.stream and self.is_paused:
+            self.is_paused = False
+
+    def stop(self):
+        if self.stream is not None:
+            self.stream.stop()
+            self.stream.close()
+            self.stream = None
+        self.pos = 0
 
 class PlotCard(QFrame):
     def __init__(self, title: str) -> None:
@@ -550,6 +488,7 @@ class DenoiseStudio(QMainWindow):
         self.is_recording = False
         self.processing_busy = False
         self.total_captured_frames = 0
+        self.player = AudioPlayer()
 
         self.setWindowTitle("信号与系统2课程项目 by cyx")
         self.resize(1360, 860)
@@ -618,15 +557,31 @@ class DenoiseStudio(QMainWindow):
         self.mmse_protection_spin.setValue(0.50)
         self.mmse_protection_spin.setFixedWidth(96)
 
-        self.play_noisy_button = QPushButton("播放原始输入")
-        self.play_noisy_button.setObjectName("SecondaryButton")
-        self.play_deepfilter_button = QPushButton("播放 DeepFilterNet2")
-        self.play_deepfilter_button.setObjectName("SecondaryButton")
-        self.play_mmse_button = QPushButton("播放 MMSE")
-        self.play_mmse_button.setObjectName("SecondaryButton")
-        self.play_noisy_button.setEnabled(False)
-        self.play_deepfilter_button.setEnabled(False)
-        self.play_mmse_button.setEnabled(False)
+        self.play_noisy_button = QPushButton("▶ 播放原始输入")
+        self.play_noisy_button.setObjectName("PlayButton")
+        self.pause_noisy_button = QPushButton("⏸ 暂停")
+        self.pause_noisy_button.setObjectName("PauseButton")
+        self.stop_noisy_button = QPushButton("⏹ 停止")
+        self.stop_noisy_button.setObjectName("StopButton")
+        
+        self.play_deepfilter_button = QPushButton("▶ 播放 DF")
+        self.play_deepfilter_button.setObjectName("PlayButton")
+        self.pause_deepfilter_button = QPushButton("⏸")
+        self.pause_deepfilter_button.setObjectName("PauseButton")
+        self.stop_deepfilter_button = QPushButton("⏹")
+        self.stop_deepfilter_button.setObjectName("StopButton")
+        
+        self.play_mmse_button = QPushButton("▶ 播放 MMSE")
+        self.play_mmse_button.setObjectName("PlayButton")
+        self.pause_mmse_button = QPushButton("⏸")
+        self.pause_mmse_button.setObjectName("PauseButton")
+        self.stop_mmse_button = QPushButton("⏹")
+        self.stop_mmse_button.setObjectName("StopButton")
+
+        for b in [self.play_noisy_button, self.play_deepfilter_button, self.play_mmse_button,
+                  self.pause_noisy_button, self.pause_deepfilter_button, self.pause_mmse_button,
+                  self.stop_noisy_button, self.stop_deepfilter_button, self.stop_mmse_button]:
+            b.setEnabled(False)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 1)
@@ -783,7 +738,13 @@ class DenoiseStudio(QMainWindow):
         quick_buttons.addWidget(self.load_noisy_button, 0, 0)
         quick_buttons.addWidget(self.record_toggle_button, 0, 1)
         quick_buttons.addWidget(self.add_gaussian_noise_button, 0, 2)
-        quick_buttons.addWidget(self.play_noisy_button, 0, 3)
+        noisy_play_group = QHBoxLayout()
+        noisy_play_group.setContentsMargins(0, 0, 0, 0)
+        noisy_play_group.setSpacing(4)
+        noisy_play_group.addWidget(self.play_noisy_button)
+        noisy_play_group.addWidget(self.pause_noisy_button)
+        noisy_play_group.addWidget(self.stop_noisy_button)
+        quick_buttons.addLayout(noisy_play_group, 0, 3)
         quick_buttons.addWidget(self.process_button, 0, 4)
         for index in range(5):
             quick_buttons.setColumnStretch(index, 1)
@@ -796,7 +757,11 @@ class DenoiseStudio(QMainWindow):
         post_denoise_label.setObjectName("HeaderCaption")
         post_denoise_layout.addWidget(post_denoise_label)
         post_denoise_layout.addWidget(self.play_deepfilter_button)
+        post_denoise_layout.addWidget(self.pause_deepfilter_button)
+        post_denoise_layout.addWidget(self.stop_deepfilter_button)
         post_denoise_layout.addWidget(self.play_mmse_button)
+        post_denoise_layout.addWidget(self.pause_mmse_button)
+        post_denoise_layout.addWidget(self.stop_mmse_button)
         post_denoise_layout.addWidget(self.progress_bar, 1)
         self.post_denoise_panel.setVisible(False)
 
@@ -834,8 +799,16 @@ class DenoiseStudio(QMainWindow):
         self.record_toggle_button.clicked.connect(self._toggle_recording)
         self.process_button.clicked.connect(self.run_comparison)
         self.play_noisy_button.clicked.connect(lambda: self.play_variant("noisy"))
+        self.pause_noisy_button.clicked.connect(self.pause_playback)
+        self.stop_noisy_button.clicked.connect(self.stop_playback)
+        
         self.play_deepfilter_button.clicked.connect(lambda: self.play_variant("deepfilter"))
+        self.pause_deepfilter_button.clicked.connect(self.pause_playback)
+        self.stop_deepfilter_button.clicked.connect(self.stop_playback)
+        
         self.play_mmse_button.clicked.connect(lambda: self.play_variant("mmse"))
+        self.pause_mmse_button.clicked.connect(self.pause_playback)
+        self.stop_mmse_button.clicked.connect(self.stop_playback)
         self.advanced_button.clicked.connect(self._open_advanced_dialog)
         self.mmse_suppression_spin.valueChanged.connect(self._handle_mmse_parameters_changed)
         self.mmse_smoothing_spin.valueChanged.connect(self._handle_mmse_parameters_changed)
@@ -1172,9 +1145,9 @@ class DenoiseStudio(QMainWindow):
         )
         if self.reference_asset is None:
             self._show_metrics_as_unavailable()
-        self.play_noisy_button.setEnabled(True)
-        self.play_deepfilter_button.setEnabled(False)
-        self.play_mmse_button.setEnabled(False)
+        for b in [self.play_noisy_button, self.pause_noisy_button, self.stop_noisy_button]: b.setEnabled(True)
+        for b in [self.play_deepfilter_button, self.pause_deepfilter_button, self.stop_deepfilter_button]: b.setEnabled(False)
+        for b in [self.play_mmse_button, self.pause_mmse_button, self.stop_mmse_button]: b.setEnabled(False)
         self._set_post_denoise_controls_visible(False)
         self._set_result_tabs_visible(False)
         self.main_tabs.setCurrentIndex(0)
@@ -1227,9 +1200,9 @@ class DenoiseStudio(QMainWindow):
         if self.reference_asset is None:
             self._show_metrics_as_unavailable()
 
-        self.play_noisy_button.setEnabled(True)
-        self.play_deepfilter_button.setEnabled(False)
-        self.play_mmse_button.setEnabled(False)
+        for b in [self.play_noisy_button, self.pause_noisy_button, self.stop_noisy_button]: b.setEnabled(True)
+        for b in [self.play_deepfilter_button, self.pause_deepfilter_button, self.stop_deepfilter_button]: b.setEnabled(False)
+        for b in [self.play_mmse_button, self.pause_mmse_button, self.stop_mmse_button]: b.setEnabled(False)
         self._set_post_denoise_controls_visible(False)
         self._set_result_tabs_visible(False)
         self.main_tabs.setCurrentIndex(0)
@@ -1274,6 +1247,7 @@ class DenoiseStudio(QMainWindow):
         self.captured_chunks = []
         self.live_input_buffer = np.zeros(0, dtype=np.float32)
         self.total_captured_frames = 0
+        self.player = AudioPlayer()
         try:
             self.capture_stream = sd.InputStream(
                 samplerate=48000,
@@ -1291,9 +1265,9 @@ class DenoiseStudio(QMainWindow):
         self.noisy_asset = None
         self.result = None
         self._refresh_record_toggle_button()
-        self.play_noisy_button.setEnabled(False)
-        self.play_deepfilter_button.setEnabled(False)
-        self.play_mmse_button.setEnabled(False)
+        for b in [self.play_noisy_button, self.pause_noisy_button, self.stop_noisy_button]: b.setEnabled(False)
+        for b in [self.play_deepfilter_button, self.pause_deepfilter_button, self.stop_deepfilter_button]: b.setEnabled(False)
+        for b in [self.play_mmse_button, self.pause_mmse_button, self.stop_mmse_button]: b.setEnabled(False)
         self._set_post_denoise_controls_visible(False)
         self._set_result_tabs_visible(False)
         self.main_tabs.setCurrentIndex(0)
@@ -1448,9 +1422,9 @@ class DenoiseStudio(QMainWindow):
         self._update_spectrogram_views(result)
         self._update_metrics(result)
         self._update_diagnosis(result)
-        self.play_noisy_button.setEnabled(True)
-        self.play_deepfilter_button.setEnabled(True)
-        self.play_mmse_button.setEnabled(True)
+        for b in [self.play_noisy_button, self.pause_noisy_button, self.stop_noisy_button]: b.setEnabled(True)
+        for b in [self.play_deepfilter_button, self.pause_deepfilter_button, self.stop_deepfilter_button]: b.setEnabled(True)
+        for b in [self.play_mmse_button, self.pause_mmse_button, self.stop_mmse_button]: b.setEnabled(True)
         self._set_post_denoise_controls_visible(True)
         self._set_result_tabs_visible(True)
         self.main_tabs.setCurrentIndex(1)
@@ -1486,25 +1460,37 @@ class DenoiseStudio(QMainWindow):
 
     def play_variant(self, variant: str) -> None:
         try:
-            sd.stop()
+            if self.player.is_paused and getattr(self, "last_played_variant", None) == variant:
+                self.player.resume()
+                return
+
+            self.player.stop()
+            self.last_played_variant = variant
+            
             if variant == "noisy":
                 asset = self._get_current_noisy_asset()
-                if asset is None:
-                    return
-                sd.play(asset.samples, asset.sample_rate)
-                return
-            if self.result is None:
-                return
-            if variant == "deepfilter":
-                sd.play(self.result.deepfilter.samples, self.result.deepfilter.sample_rate)
-                return
-            if variant == "mmse":
-                sd.play(self.result.mmse.samples, self.result.mmse.sample_rate)
+                if asset is None: return
+                self.player.play(asset.samples, asset.sample_rate)
+            elif self.result is not None:
+                if variant == "deepfilter":
+                    self.player.play(self.result.deepfilter.samples, self.result.deepfilter.sample_rate)
+                elif variant == "mmse":
+                    self.player.play(self.result.mmse.samples, self.result.mmse.sample_rate)
         except Exception as exc:
             QMessageBox.critical(self, "播放失败", str(exc))
 
+    def pause_playback(self):
+        self.player.pause()
+
+    def stop_playback(self):
+        self.player.stop()
+
     def closeEvent(self, event) -> None:
         self.stop_recording(silent=True)
+        try:
+            self.player.stop()
+        except:
+            pass
         try:
             sd.stop()
         except Exception:

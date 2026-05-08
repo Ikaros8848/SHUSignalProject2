@@ -10,6 +10,7 @@ import numpy as np
 import soundfile as sf
 import torch
 from pesq import pesq
+import scipy.special as sp
 from scipy.signal import istft, resample_poly, stft
 
 from df.enhance import enhance, init_df
@@ -362,8 +363,8 @@ def mmse_decision_directed_denoise(
     speech_threshold = float(np.clip(2.5 - 0.9 * suppression_strength + 0.4 * speech_protection, 1.0, 3.2))
     # 用分位数初始化噪声 PSD，分位数越低越保守（更偏向纯噪声底）。
     noise_percentile = float(np.clip(8.0 + 15.0 * suppression_strength - 7.0 * speech_protection, 5.0, 28.0))
-    # 过减系数（over-subtraction）：提高等效噪声估计，换取更强抑制。
-    over_subtraction = float(np.clip(1.0 + 1.8 * suppression_strength - 0.4 * speech_protection, 1.0, 2.8))
+    # 过减系数（over-subtraction）：适当降低以防止误伤人声。
+    over_subtraction = float(np.clip(1.0 + 1.0 * suppression_strength - 0.6 * speech_protection, 1.0, 2.0))
     # 后滤波强度：在低语音存在概率处进一步衰减残余噪声。
     post_filter_strength = float(np.clip(0.08 + 0.32 * suppression_strength - 0.10 * speech_protection, 0.05, 0.35))
     # 语音存在时噪声更新非常慢，避免把语音误吸收到噪声模型中。
@@ -423,21 +424,39 @@ def mmse_decision_directed_denoise(
         )
         prior_snr = np.clip(prior_snr, 1e-4, 1e2)
 
-        # 维纳型增益：G = ξ / (1 + ξ)。
-        # ξ 越大（更像语音），增益越接近 1；ξ 越小（更像噪声），增益越接近 0。
-        gain = prior_snr / (1.0 + prior_snr)
-        # 对频率增益做邻域平滑，降低“音乐噪声”的频点抖动。
+        # 计算 v 参数 (先验与后验 SNR 的函数)
+        v = (prior_snr / (1.0 + prior_snr)) * post_snr
+        v_clipped = np.clip(v, 1e-10, 30.0)
+
+        # 1. MMSE-LSA (Log-Spectral Amplitude) 增益估计
+        # 使用 scipy.special.expi 计算指数积分 E1(v) = -expi(-v)
+        gain_lsa = (prior_snr / (1.0 + prior_snr)) * np.exp(-0.5 * sp.expi(-v_clipped))
+
+        # 2. 计算基于似然比的语音存在概率 (Speech Presence Probability, SPP)
+        likelihood = np.exp(v_clipped) / (1.0 + prior_snr)
+        # 动态调整先验缺失概率 (q值)，适当降低使得算法更倾向于保留声音
+        q_prob = np.clip(0.3 + 0.3 * suppression_strength - 0.2 * speech_protection, 0.05, 0.8)
+        theta = q_prob / (1.0 - q_prob)
+        # 计算理论 SPP
+        spp_smooth = likelihood / (likelihood + theta)
+        
+        # 将原来的乘法改为取最大值或更缓和的逻辑，减少人声被双重压制的概率
+        spp_sigmoid = 1.0 / (1.0 + np.exp(-1.2 * (post_snr - speech_threshold)))
+        speech_presence = np.maximum(spp_smooth, spp_sigmoid)
+
+        # 3. OMLSA (Optimally Modified LSA) 增益融合
+        # 充分认定为有语音时使用 LSA 增益，否则柔和降落至底噪增益下限
+        gain = (gain_lsa ** speech_presence) * (gain_floor ** (1.0 - speech_presence))
+        
+        # 避免极端情况下的数值问题
+        gain = np.clip(gain, gain_floor, 1.0)
+
+        # 4. 对频率增益做邻域平滑，降低“音乐噪声”的频点抖动。
         gain = np.pad(gain, (1, 1), mode="edge")
         gain = np.convolve(gain, frequency_smoothing_kernel, mode="valid")
-        # 时间方向再与上一帧增益融合，进一步稳定听感。
+        # 5. 时间方向融合
         gain = gain_blend * previous_gain + (1.0 - gain_blend) * gain
 
-        # 语音存在概率（sigmoid 映射）：
-        # post_snr 高于阈值时趋近 1，低于阈值时趋近 0。
-        speech_presence = 1.0 / (1.0 + np.exp(-1.4 * (post_snr - speech_threshold)))
-        # 在“语音不太可能存在”的频点增强抑制。
-        attenuation = 1.0 - post_filter_strength * (1.0 - speech_presence)
-        gain = np.clip(gain * attenuation, gain_floor, 1.0)
         enhanced_spectrum[:, frame_index] = gain * spectrum[:, frame_index]
 
         # 自适应噪声跟踪：

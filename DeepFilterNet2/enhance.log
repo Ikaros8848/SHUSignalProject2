@@ -1409,3 +1409,27 @@
 2026-03-28 13:32:07 | INFO     | DF | Found checkpoint D:\Miscs\OTHER\coding\signalPrj\DeepFilterNet2\checkpoints\model_96.ckpt.best with epoch 96
 2026-03-28 13:32:07 | INFO     | DF | Running on device cpu
 2026-03-28 13:32:07 | INFO     | DF | Model loaded
+2026-05-04 21:33:08 | INFO     | DF | Running on torch 2.0.1+cpu
+2026-05-04 21:33:08 | INFO     | DF | Running on host Ikaros
+2026-05-04 21:33:08 | INFO     | DF | Git commit: 123ddba, branch: master
+2026-05-04 21:33:08 | INFO     | DF | Loading model settings of DeepFilterNet2
+2026-05-04 21:33:08 | INFO     | DF | Initializing model `deepfilternet2`
+2026-05-04 21:33:08 | INFO     | DF | Found checkpoint D:\Miscs\OTHER\coding\signalPrj\DeepFilterNet2\checkpoints\model_96.ckpt.best with epoch 96
+2026-05-04 21:33:08 | INFO     | DF | Running on device cpu
+2026-05-04 21:33:08 | INFO     | DF | Model loaded
+2026-05-08 16:38:19 | INFO     | DF | Running on torch 2.0.1+cpu
+2026-05-08 16:38:19 | INFO     | DF | Running on host Ikaros
+2026-05-08 16:38:20 | INFO     | DF | Git commit: 123ddba, branch: master
+2026-05-08 16:38:20 | INFO     | DF | Loading model settings of DeepFilterNet2
+2026-05-08 16:38:20 | INFO     | DF | Initializing model `deepfilternet2`
+2026-05-08 16:38:20 | INFO     | DF | Found checkpoint D:\Miscs\OTHER\coding\signalPrj\DeepFilterNet2\checkpoints\model_96.ckpt.best with epoch 96
+2026-05-08 16:38:20 | INFO     | DF | Running on device cpu
+2026-05-08 16:38:20 | INFO     | DF | Model loaded
+2026-05-08 16:38:54 | INFO     | DF | Running on torch 2.0.1+cpu
+2026-05-08 16:38:54 | INFO     | DF | Running on host Ikaros
+2026-05-08 16:38:54 | INFO     | DF | Git commit: 123ddba, branch: master
+2026-05-08 16:38:54 | INFO     | DF | Loading model settings of DeepFilterNet2
+2026-05-08 16:38:54 | INFO     | DF | Initializing model `deepfilternet2`
+2026-05-08 16:38:55 | INFO     | DF | Found checkpoint D:\Miscs\OTHER\coding\signalPrj\DeepFilterNet2\checkpoints\model_96.ckpt.best with epoch 96
+2026-05-08 16:38:55 | INFO     | DF | Running on device cpu
+2026-05-08 16:38:55 | INFO     | DF | Model loaded
